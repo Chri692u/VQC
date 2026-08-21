@@ -60,8 +60,8 @@ module AccountOps {
             GetOrder(orders[1..], target)
     }
 
-    // Replaces an order in a sequence with an updated version.
-    function ReplaceOrder(orders: seq<Order>, updated: Order): seq<Order>
+    // Updates an order in a sequence with a new version.
+    function UpdateOrder(orders: seq<Order>, updated: Order): seq<Order>
         requires IsValidOrderSet(orders)
         requires IsValidOrder(updated)
         requires ExistsOrder(orders, updated.orderId)
@@ -72,7 +72,7 @@ module AccountOps {
         else if orders[0].orderId == updated.orderId then
             [updated] + orders[1..]
         else
-            [orders[0]] + ReplaceOrder(orders[1..], updated)
+            [orders[0]] + UpdateOrder(orders[1..], updated)
     }
 
     // Returns true when a position for the given symbol exists.
@@ -94,8 +94,8 @@ module AccountOps {
             GetPosition(positions[1..], symbol)
     }
 
-    // Replaces a position in a sequence with an updated version.
-    function ReplacePosition(positions: seq<Position>, updated: Position): seq<Position>
+    // Updates a position in a sequence with a new version.
+    function UpdatePosition(positions: seq<Position>, updated: Position): seq<Position>
         requires IsValidPositionSet(positions)
         requires IsValidPosition(updated)
         requires ExistsPosition(positions, updated.symbol)
@@ -106,11 +106,11 @@ module AccountOps {
         else if positions[0].symbol == updated.symbol then
             [updated] + positions[1..]
         else
-            [positions[0]] + ReplacePosition(positions[1..], updated)
+            [positions[0]] + UpdatePosition(positions[1..], updated)
     }
 
-    // Inserts or updates a position in a sequence.
-    function UpsertPosition(positions: seq<Position>, updated: Position): seq<Position>
+    // Inserts a position into a sequence.
+    function InsertPosition(positions: seq<Position>, updated: Position): seq<Position>
         requires IsValidPositionSet(positions)
         requires IsValidPosition(updated)
         decreases |positions|
@@ -120,7 +120,7 @@ module AccountOps {
         else if positions[0].symbol == updated.symbol then
             [updated] + positions[1..]
         else
-            [positions[0]] + UpsertPosition(positions[1..], updated)
+            [positions[0]] + InsertPosition(positions[1..], updated)
     }
 
     // Adds a deposit to the account ledger and cash balance.
@@ -189,7 +189,7 @@ module AccountOps {
         var updatedOrder := Orders.ApplyFill(order, fill.quantity);
         var updatedOrders :=
             if ExistsOrder(account.orders, order.orderId) then
-                ReplaceOrder(account.orders, updatedOrder)
+                UpdateOrder(account.orders, updatedOrder)
             else
                 account.orders + [updatedOrder];
 
@@ -220,7 +220,7 @@ module AccountOps {
                 );
 
         assume {:axiom} IsValidPosition(nextPosition);
-        var updatedPositions := UpsertPosition(account.positions, nextPosition);
+        var updatedPositions := InsertPosition(account.positions, nextPosition);
 
         var nextId := NextLedgerId(account.ledger);
         var tradeEntry := LedgerEntry.Trade(nextId, fill);
