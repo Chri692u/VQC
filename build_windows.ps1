@@ -4,7 +4,7 @@ Usage:
     powershell -ExecutionPolicy Bypass -File .\build_windows.ps1 -CompileTarget py
     powershell -ExecutionPolicy Bypass -File .\build_windows.ps1 -CompileTarget cs
 
-Common Dafny targets:
+Dafny target examples:
     - cs  = C#
     - py  = Python
     - js  = JavaScript
@@ -32,6 +32,4 @@ if (Test-Path $outputDir) {
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-# /compile:0 tells Dafny to stop after generating target source.
-# /spillTargetCode:3 writes the target code even if verification fails.
-& dafny /compileTarget:$CompileTarget /compile:0 /spillTargetCode:3 /out:$outputFile $entryFile
+& dafny /compileTarget:$CompileTarget /compile:0 /out:$outputFile $entryFile

@@ -74,3 +74,23 @@ Public types:
 - `PositionValue(pos)` - Computes quantity times average unit price
 - `ApplyBuy(pos,fill)` - Computes the updated position from a buy
 - `ApplySell(pos,fill)` - Computes the updated position from a sell
+
+## Ledger.dfy
+
+Public types:
+
+- `LedgerId` - unique identifier for a ledger event.
+- `LedgerEntry` - one historical account-affecting event, with variants `Deposit`, `Withdrawal`, and `Trade`.
+- `Ledger` - immutable append-only ledger history storing a sequence of entries.
+
+Public functions and predicates:
+- `EntryId(entry)` - extracts the ledger id from any entry.
+- `IsValidEntry(entry)` - validates one ledger event.
+- `IsValidLedgerId(id)` - checks that a ledger event id is positive.
+- `IsValidLedger(ledger)` - validates all entries and uniqueness of ids.
+- `ContainsLedgerId(entries, id)` - checks whether an id is already present in a ledger history.
+- `AllUniqueLedgerIds(entries)` - checks that all ids in a history are unique.
+- `Append(ledger, entry)` - returns a new immutable ledger with the new entry appended; requires a valid current ledger, a valid new entry, and a fresh id.
+- `TotalDeposits(ledger)` - requires `IsValidLedger(ledger)` and sums all deposit amounts.
+- `TotalWithdrawals(ledger)` - requires `IsValidLedger(ledger)` and sums all withdrawal amounts.
+- `NetCashFlow(ledger)` - requires `IsValidLedger(ledger)` and computes deposits minus withdrawals, excluding trades.
