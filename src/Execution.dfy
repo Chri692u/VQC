@@ -1,64 +1,22 @@
+include "Types.dfy"
+include "Validation.dfy"
+include "Currency.dfy"
 include "Orders.dfy"
 
 module Execution {
+    import opened Types
+    import opened Validation
     import opened Currency
     import opened Orders
 
-    // ----------------------
-    // Identifiers
-    // ----------------------
-
-    datatype ExecutionId = ExecutionId(value: nat)
-
-    // ----------------------
-    // Fill Representation
-    // ----------------------
-
-    datatype Fill = Fill(
-        executionId: ExecutionId,
-        orderId: OrderId,
-        symbol: string,
-        quantity: nat,
-        price: Currency.Money,
-        timestamp: nat
-    )
-
-    // ----------------------
-    // Validation
-    // ----------------------
-
-    predicate IsValidFill(fill: Fill)
-    {
-        fill.executionId.value > 0 &&
-        fill.quantity > 0 &&
-        |fill.symbol| > 0 &&
-        Currency.IsPositive(fill.price)
-    }
-
-    predicate AllValidFills(fills: seq<Fill>)
-        decreases |fills|
-    {
-        if |fills| == 0 then
-            true
-        else
-            IsValidFill(fills[0]) &&
-            AllValidFills(fills[1..])
-    }
-
-    // ----------------------
-    // Derived Values
-    // ----------------------
-
-    function ExecutionValue(fill: Fill): Currency.Money
+    // Returns the monetary value of a fill.
+    function ExecutionValue(fill: Fill): Money
         requires IsValidFill(fill)
     {
-        Currency.Cost(fill.quantity, fill.price)
+        Cost(fill.quantity, fill.price)
     }
 
-    // ----------------------
-    // Aggregation
-    // ----------------------
-
+    // Returns the total quantity across a sequence of fills.
     function TotalExecutedQuantity(fills: seq<Fill>): nat
         decreases |fills|
     {
@@ -68,19 +26,18 @@ module Execution {
             fills[0].quantity + TotalExecutedQuantity(fills[1..])
     }
 
-    function TotalExecutedValue(fills: seq<Fill>): Currency.Money
-        requires AllValidFills(fills)
+    // Returns the total value across a sequence of valid fills.
+    function TotalExecutedValue(fills: seq<Fill>): Money
+        requires forall i :: 0 <= i < |fills| ==> IsValidFill(fills[i])
         decreases |fills|
     {
         if |fills| == 0 then
-            Currency.Money(0)
+            Money(0)
         else
-            Currency.Add(
-                ExecutionValue(fills[0]),
-                TotalExecutedValue(fills[1..])
-            )
+            Add(ExecutionValue(fills[0]), TotalExecutedValue(fills[1..]))
     }
 
+    // Returns the total executed quantity for a specific order.
     function TotalExecutedQuantityForOrder(fills: seq<Fill>, order: Order): nat
         requires IsValidOrder(order)
         decreases |fills|
@@ -93,10 +50,7 @@ module Execution {
             TotalExecutedQuantityForOrder(fills[1..], order)
     }
 
-    // ----------------------
-    // Matching
-    // ----------------------
-
+    // Returns true when a fill belongs to an order.
     predicate BelongsToOrder(fill: Fill, order: Order)
     {
         fill.orderId == order.orderId &&

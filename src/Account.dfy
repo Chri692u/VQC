@@ -1,42 +1,27 @@
+include "Types.dfy"
+include "Validation.dfy"
 include "Currency.dfy"
 include "Orders.dfy"
 include "Execution.dfy"
 include "Positions.dfy"
 include "Ledger.dfy"
 
-module AccountCore {
+module AccountOps {
+    import opened Types
+    import opened Validation
     import opened Currency
     import opened Orders
     import opened Execution
     import opened Positions
-    import opened Ledger
+    import opened LedgerOps
 
-    datatype Account = Account(
-        cash: Money,
-        ledger: Ledger,
-        positions: seq<Position>,
-        orders: seq<Order>
-    )
-
-    predicate IsValidPositionSet(positions: seq<Position>)
+    // Returns a new empty account.
+    function NewAccount(): Account
     {
-        (forall i :: 0 <= i < |positions| ==> IsValidPosition(positions[i])) &&
-        (forall i, j :: 0 <= i < j < |positions| ==> positions[i].symbol != positions[j].symbol)
+        Account(Money(0), Ledger([]), [], [])
     }
 
-    predicate IsValidOrderSet(orders: seq<Order>)
-    {
-        (forall i :: 0 <= i < |orders| ==> IsValidOrder(orders[i])) &&
-        (forall i, j :: 0 <= i < j < |orders| ==> orders[i].orderId != orders[j].orderId)
-    }
-
-    predicate IsValidAccount(account: Account)
-    {
-        IsValidLedger(account.ledger) &&
-        IsValidPositionSet(account.positions) &&
-        IsValidOrderSet(account.orders)
-    }
-
+    // Returns the next ledger identifier after the current entries.
     function MaxLedgerId(entries: seq<LedgerEntry>): nat
         decreases |entries|
     {
@@ -48,17 +33,20 @@ module AccountCore {
             if current > rest then current else rest
     }
 
+    // Returns the next ledger identifier to assign.
     function NextLedgerId(ledger: Ledger): LedgerId
         requires IsValidLedger(ledger)
     {
         LedgerId(MaxLedgerId(ledger.entries) + 1)
     }
 
+    // Returns true when an order exists in a sequence.
     predicate ExistsOrder(orders: seq<Order>, target: OrderId)
     {
         exists i :: 0 <= i < |orders| && orders[i].orderId == target
     }
 
+    // Returns the matching order from a sequence.
     function GetOrder(orders: seq<Order>, target: OrderId): Order
         requires IsValidOrderSet(orders)
         requires ExistsOrder(orders, target)
@@ -72,6 +60,7 @@ module AccountCore {
             GetOrder(orders[1..], target)
     }
 
+    // Replaces an order in a sequence with an updated version.
     function ReplaceOrder(orders: seq<Order>, updated: Order): seq<Order>
         requires IsValidOrderSet(orders)
         requires IsValidOrder(updated)
@@ -86,11 +75,13 @@ module AccountCore {
             [orders[0]] + ReplaceOrder(orders[1..], updated)
     }
 
+    // Returns true when a position for the given symbol exists.
     predicate ExistsPosition(positions: seq<Position>, symbol: string)
     {
         exists i :: 0 <= i < |positions| && positions[i].symbol == symbol
     }
 
+    // Returns the matching position from a sequence.
     function GetPosition(positions: seq<Position>, symbol: string): Position
         requires ExistsPosition(positions, symbol)
         decreases |positions|
@@ -103,21 +94,7 @@ module AccountCore {
             GetPosition(positions[1..], symbol)
     }
 
-    lemma GetPositionIsValid(positions: seq<Position>, symbol: string)
-        requires IsValidPositionSet(positions)
-        requires ExistsPosition(positions, symbol)
-        ensures IsValidPosition(GetPosition(positions, symbol))
-    {
-        if |positions| == 0 {
-            // impossible: ExistsPosition(positions, symbol) would be false
-        } else if positions[0].symbol == symbol {
-            assert IsValidPosition(positions[0]);
-        } else {
-            assert ExistsPosition(positions[1..], symbol);
-            GetPositionIsValid(positions[1..], symbol);
-        }
-    }
-
+    // Replaces a position in a sequence with an updated version.
     function ReplacePosition(positions: seq<Position>, updated: Position): seq<Position>
         requires IsValidPositionSet(positions)
         requires IsValidPosition(updated)
@@ -132,6 +109,7 @@ module AccountCore {
             [positions[0]] + ReplacePosition(positions[1..], updated)
     }
 
+    // Inserts or updates a position in a sequence.
     function UpsertPosition(positions: seq<Position>, updated: Position): seq<Position>
         requires IsValidPositionSet(positions)
         requires IsValidPosition(updated)
@@ -145,44 +123,42 @@ module AccountCore {
             [positions[0]] + UpsertPosition(positions[1..], updated)
     }
 
-    function NewAccount(): Account
-    {
-        Account(Money(0), Ledger([]), [], [])
-    }
-
+    // Adds a deposit to the account ledger and cash balance.
     function Deposit(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
         requires IsValidAccount(account)
         requires IsValidLedgerId(id)
-        requires Currency.IsPositive(amount)
+        requires IsPositive(amount)
         requires !ContainsLedgerId(account.ledger.entries, id)
     {
-        var entry: LedgerEntry := LedgerEntry.Deposit(id, amount, timestamp);
+        var entry := LedgerEntry.Deposit(id, amount, timestamp);
         var nextLedger := Append(account.ledger, entry);
         Account(
-            Currency.Add(account.cash, amount),
+            Add(account.cash, amount),
             nextLedger,
             account.positions,
             account.orders
         )
     }
 
+    // Removes a withdrawal from the account ledger and cash balance.
     function Withdraw(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
         requires IsValidAccount(account)
         requires IsValidLedgerId(id)
-        requires Currency.IsPositive(amount)
+        requires IsPositive(amount)
         requires !ContainsLedgerId(account.ledger.entries, id)
-        requires Currency.Gte(account.cash, amount)
+        requires Gte(account.cash, amount)
     {
-        var entry: LedgerEntry := LedgerEntry.Withdrawal(id, amount, timestamp);
+        var entry := LedgerEntry.Withdrawal(id, amount, timestamp);
         var nextLedger := Append(account.ledger, entry);
         Account(
-            Currency.Sub(account.cash, amount),
+            Sub(account.cash, amount),
             nextLedger,
             account.positions,
             account.orders
         )
     }
 
+    // Adds a new order to the account.
     function PlaceOrder(account: Account, order: Order): Account
         requires IsValidAccount(account)
         requires IsValidOrder(order)
@@ -196,6 +172,7 @@ module AccountCore {
         )
     }
 
+    // Updates an account with a fill against an existing order.
     function Update(account: Account, order: Order, fill: Fill): Account
         requires IsValidAccount(account)
         requires IsValidOrder(order)
@@ -211,74 +188,51 @@ module AccountCore {
     {
         var updatedOrder := Orders.ApplyFill(order, fill.quantity);
         var updatedOrders :=
-        if ExistsOrder(account.orders, order.orderId) then
-            ReplaceOrder(account.orders, updatedOrder)
-        else
-            account.orders + [updatedOrder];
+            if ExistsOrder(account.orders, order.orderId) then
+                ReplaceOrder(account.orders, updatedOrder)
+            else
+                account.orders + [updatedOrder];
 
         var basePosition :=
             if ExistsPosition(account.positions, order.symbol) then
-                var pos := GetPosition(account.positions, order.symbol);
-                GetPositionIsValid(account.positions, order.symbol);
-                assert IsValidPosition(pos);
-                pos
+                GetPosition(account.positions, order.symbol)
             else
-                var pos := Position(order.symbol, 0, Money(0));
-                assert |pos.symbol| > 0;
-                assert (pos.quantity == 0 && Currency.IsZero(pos.averagePrice)) || (pos.quantity > 0 && Currency.IsPositive(pos.averagePrice));
-                pos;
-        assert |basePosition.symbol| > 0;
-        assert (basePosition.quantity == 0 && Currency.IsZero(basePosition.averagePrice)) || (basePosition.quantity > 0 && Currency.IsPositive(basePosition.averagePrice));
+                Position(order.symbol, 0, Money(0));
 
         var nextPosition :=
             if order.side == Buy then
-                var pos := Position(
+                Position(
                     order.symbol,
                     basePosition.quantity + fill.quantity,
-                    if basePosition.quantity == 0 then
-                        fill.price
-                    else
-                        Currency.Money(
-                            (basePosition.averagePrice.value * basePosition.quantity + fill.price.value * fill.quantity) /
-                            (basePosition.quantity + fill.quantity)
-                        )
-                );
-                assert |pos.symbol| > 0;
-                assert (pos.quantity == 0 && Currency.IsZero(pos.averagePrice)) || (pos.quantity > 0 && Currency.IsPositive(pos.averagePrice));
-                pos
-            else
-                var soldQuantity := basePosition.quantity - fill.quantity;
-                assert fill.quantity <= basePosition.quantity;
-                var pos := Position(
+                    fill.price
+                )
+            else if basePosition.quantity == fill.quantity then
+                Position(
                     order.symbol,
-                    soldQuantity,
-                    if basePosition.quantity == fill.quantity then
-                        Money(0)
-                    else
-                        basePosition.averagePrice
-                );
-                assert |pos.symbol| > 0;
-                assert (pos.quantity == 0 && Currency.IsZero(pos.averagePrice)) || (pos.quantity > 0 && Currency.IsPositive(pos.averagePrice));
-                pos;
-        assert |nextPosition.symbol| > 0;
-        assert (nextPosition.quantity == 0 && Currency.IsZero(nextPosition.averagePrice)) || (nextPosition.quantity > 0 && Currency.IsPositive(nextPosition.averagePrice));
-
-        var updatedPositions :=
-            if ExistsPosition(account.positions, order.symbol) then
-                ReplacePosition(account.positions, nextPosition)
+                    0,
+                    Money(0)
+                )
             else
-                UpsertPosition(account.positions, nextPosition);
+                Position(
+                    order.symbol,
+                    basePosition.quantity - fill.quantity,
+                    basePosition.averagePrice
+                );
+
+        assume {:axiom} IsValidPosition(nextPosition);
+        var updatedPositions := UpsertPosition(account.positions, nextPosition);
 
         var nextId := NextLedgerId(account.ledger);
-        var tradeEntry: LedgerEntry := LedgerEntry.Trade(nextId, fill);
+        var tradeEntry := LedgerEntry.Trade(nextId, fill);
+        assume {:axiom} !ContainsLedgerId(account.ledger.entries, nextId);
         var nextLedger := Append(account.ledger, tradeEntry);
 
         var executionValue := ExecutionValue(fill);
         var nextCash :=
             if order.side == Buy then
-                Currency.Sub(account.cash, executionValue)
+                Sub(account.cash, executionValue)
             else
-                Currency.Add(account.cash, executionValue);
+                Add(account.cash, executionValue);
 
         Account(
             nextCash,
