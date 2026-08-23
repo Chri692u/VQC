@@ -1,6 +1,6 @@
 # VQC API Overview
 
-This document describes the public-facing Dafny API. It is intentionally limited to the operations a library consumer or integrator would use, and it excludes internal helper functions that are only used to implement account state transitions.
+This document describes the public-facing Dafny API. It is intentionally limited to the operations a library consumer or integrator would use, and it excludes internal implementation functions that are only used to implement account state transitions.
 
 ## Module: Types
 
@@ -30,7 +30,7 @@ Core shared domain types used throughout the system.
 
 ## Module: Currency
 
-Core arithmetic and comparison helpers for money.
+Core arithmetic and comparison functions for money.
 
 ### Constructors and arithmetic
 
