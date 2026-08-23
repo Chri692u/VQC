@@ -32,7 +32,7 @@ def test_deposit_and_withdraw():
 
 def test_order_and_fill_construction():
     print("[test] Order/Fill/Position")
-    order = VQC.Order(1, "AAPL", 10, "buy", "market", 0, "new")
+    order = VQC.Order(1, "AAPL", 10, "buy", "market", "new", 0)
     assert order.orderId == 1
     assert order.symbol == "AAPL"
     assert order.quantity == 10
@@ -51,7 +51,7 @@ def test_place_order_and_update_fill():
     account = VQC.NewAccount()
     account = VQC.Deposit(account, 1000, 1, 0)
 
-    order = VQC.Order(1, "AAPL", 10, "buy", "market", 0, "new")
+    order = VQC.Order(1, "AAPL", 10, "buy", "market", "new", 0)
     account = VQC.PlaceOrder(account, order)
     assert len(account.orders) == 1
 
@@ -97,7 +97,7 @@ def test_money_arithmetic():
 
 def test_order_helpers():
     print("[test] Order helpers")
-    order = VQC.Order(1, "AAPL", 8, "buy", "market", 3, "partially_filled")
+    order = VQC.Order(1, "AAPL", 8, "buy", "market", "partially_filled", 3)
     assert VQC.RemainingQuantity(order) == 5
 
     updated = VQC.ApplyFill(order, 2)

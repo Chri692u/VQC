@@ -196,8 +196,8 @@ def Order(
     quantity: int,
     side: str = "buy",
     order_type: str = "market",
-    filled_quantity: int = 0,
     status: str = "new",
+    filled_quantity: int = 0,
     limit_price: int | None = None,
 ):
     if side == "buy":
@@ -218,6 +218,8 @@ def Order(
 
     if status == "new":
         status_enum = Types.OrderStatus_New()
+    elif status == "accepted":
+        status_enum = Types.OrderStatus_Accepted()
     elif status == "partially_filled":
         status_enum = Types.OrderStatus_PartiallyFilled()
     elif status == "filled":
@@ -247,6 +249,32 @@ def Fill(execution_id: int, order_id: int, symbol: str, quantity: int, price: in
 def Position(symbol: str, quantity: int, average_price: int):
     return Types.Position_Position(symbol, quantity, average_price)
 
+
+def display_account(account) -> str:
+    positions = account.positions
+    orders = account.orders
+    position_lines = [
+        f"    {position.symbol}: {position.quantity} shares @ {position.averagePrice}"
+        for position in positions
+    ]
+    order_lines = [
+        f"    #{order.orderId} {type(order.side).__name__.rsplit('_', 1)[-1].lower()} "
+        f"{order.quantity} {order.symbol} ({type(order.status).__name__.rsplit('_', 1)[-1].lower()})"
+        for order in orders
+    ]
+
+    return "\n".join(
+        [
+            "VQC Account",
+            f"  Cash: {account.cash}",
+            "  Positions:",
+            *(position_lines or ["    none"]),
+            "  Orders:",
+            *(order_lines or ["    none"]),
+            f"  Ledger entries: {len(account.ledger)}",
+        ]
+    )
+
 # ---------------------------------------------------------------------------
 # Order state helpers
 # ---------------------------------------------------------------------------
@@ -255,6 +283,8 @@ def Position(symbol: str, quantity: int, average_price: int):
 def _status_enum(status: str):
     if status == "new":
         return Types.OrderStatus_New()
+    if status == "accepted":
+        return Types.OrderStatus_Accepted()
     if status == "partially_filled":
         return Types.OrderStatus_PartiallyFilled()
     if status == "filled":
@@ -271,6 +301,25 @@ RemainingQuantity = Orders.RemainingQuantity
 
 def SetStatus(order, new_status: str):
     return Orders.SetStatus(order, _status_enum(new_status))
+
+
+def SetOrderStatus(account, order_id: int, new_status: str):
+    updated_orders = []
+    found = False
+    for order in account.orders:
+        if order.orderId == order_id:
+            updated_orders.append(SetStatus(order, new_status))
+            found = True
+        else:
+            updated_orders.append(order)
+    if not found:
+        raise ValueError(f"order not found: {order_id}")
+    return Types.Account_Account(
+        account.cash,
+        account.ledger,
+        account.positions,
+        updated_orders,
+    )
 
 
 ApplyFill = Orders.ApplyFill
@@ -293,10 +342,12 @@ class VQC:
     Order = Order
     Fill = Fill
     Position = Position
+    display_account = display_account
     Sum = Sum
     Cost = Cost
     RemainingQuantity = RemainingQuantity
     SetStatus = SetStatus
+    SetOrderStatus = SetOrderStatus
     ApplyFill = ApplyFill
     Cancel = Cancel
     Reject = Reject
@@ -315,10 +366,12 @@ __all__ = [
     "Order",
     "Fill",
     "Position",
+    "display_account",
     "Sum",
     "Cost",
     "RemainingQuantity",
     "SetStatus",
+    "SetOrderStatus",
     "ApplyFill",
     "Cancel",
     "Reject",

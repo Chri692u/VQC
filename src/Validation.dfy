@@ -34,7 +34,7 @@ module Validation {
     // Order checks.
     predicate IsOpenStatus(status: OrderStatus)
     {
-        status == New || status == PartiallyFilled
+        status == New || status == Accepted || status == PartiallyFilled
     }
 
     predicate IsMarketOrder(order: Order)
@@ -75,6 +75,7 @@ module Validation {
     {
         match order.status
             case New => IsUnfilled(order)
+            case Accepted => IsUnfilled(order)
             case PartiallyFilled => 0 < order.filledQuantity < order.quantity
             case Filled => IsFullyFilled(order)
             case Cancelled => order.filledQuantity < order.quantity
@@ -98,7 +99,7 @@ module Validation {
 
     predicate CanAcceptFill(status: OrderStatus)
     {
-        status == New || status == PartiallyFilled
+        status == New || status == Accepted || status == PartiallyFilled
     }
 
     predicate CanTransition(fromStatus: OrderStatus, toStatus: OrderStatus)
@@ -106,6 +107,8 @@ module Validation {
         fromStatus == toStatus ||
         (match fromStatus
             case New =>
+                toStatus == Accepted || toStatus == PartiallyFilled || toStatus == Filled || toStatus == Cancelled || toStatus == Rejected
+            case Accepted =>
                 toStatus == PartiallyFilled || toStatus == Filled || toStatus == Cancelled || toStatus == Rejected
             case PartiallyFilled =>
                 toStatus == Filled || toStatus == Cancelled || toStatus == Rejected
