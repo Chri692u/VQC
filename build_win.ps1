@@ -32,4 +32,4 @@ if (Test-Path $outputDir) {
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-& dafny /compileTarget:$CompileTarget /compile:0 /out:$outputFile $entryFile
+& dafny build $entryFile --target:$CompileTarget --output:$outputFile
