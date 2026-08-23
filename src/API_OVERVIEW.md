@@ -14,7 +14,7 @@ Core shared domain types used throughout the system.
 - `LedgerId` — ledger entry identifier
 - `OrderSide` — `Buy | Sell`
 - `OrderType` — `Market | Limit(limitPrice: Money)`
-- `OrderStatus` — `New | PartiallyFilled | Filled | Cancelled | Rejected`
+- `OrderStatus` — `New | Accepted | PartiallyFilled | Filled | Cancelled | Rejected`
 - `Order` — canonical order record
 - `Fill` — execution record
 - `Position` — symbol + quantity + average price

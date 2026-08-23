@@ -10,7 +10,7 @@ module Types {
     // Order lifecycle and pricing.
     datatype OrderSide = Buy | Sell
     datatype OrderType = Market | Limit(limitPrice: Money)
-    datatype OrderStatus = New | PartiallyFilled | Filled | Cancelled | Rejected
+    datatype OrderStatus = New | Accepted | PartiallyFilled | Filled | Cancelled | Rejected
 
     // Order representation.
     datatype Order = Order(

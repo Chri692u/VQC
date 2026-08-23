@@ -51,7 +51,7 @@ module Orders {
     // Returns the order in a cancelled state.
     function Cancel(order: Order): Order
         requires IsValidOrder(order)
-        requires order.status == New || order.status == PartiallyFilled
+        requires order.status == New || order.status == Accepted || order.status == PartiallyFilled
     {
         Order(
             order.orderId,
@@ -67,7 +67,7 @@ module Orders {
     // Returns the order in a rejected state.
     function Reject(order: Order): Order
         requires IsValidOrder(order)
-        requires order.status == New
+        requires order.status == New || order.status == Accepted
     {
         Order(
             order.orderId,
