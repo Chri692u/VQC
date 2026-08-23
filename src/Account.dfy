@@ -124,7 +124,7 @@ module AccountOps {
     }
 
     // Adds a deposit to the account ledger and cash balance.
-    function Deposit(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
+    function DepositCore(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
         requires IsValidAccount(account)
         requires IsValidLedgerId(id)
         requires IsPositive(amount)
@@ -141,7 +141,7 @@ module AccountOps {
     }
 
     // Removes a withdrawal from the account ledger and cash balance.
-    function Withdraw(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
+    function WithdrawCore(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
         requires IsValidAccount(account)
         requires IsValidLedgerId(id)
         requires IsPositive(amount)
@@ -159,7 +159,7 @@ module AccountOps {
     }
 
     // Adds a new order to the account.
-    function PlaceOrder(account: Account, order: Order): Account
+    function PlaceOrderCore(account: Account, order: Order): Account
         requires IsValidAccount(account)
         requires IsValidOrder(order)
         requires !ExistsOrder(account.orders, order.orderId)
@@ -173,7 +173,7 @@ module AccountOps {
     }
 
     // Updates an account with a fill against an existing order.
-    function Update(account: Account, order: Order, fill: Fill): Account
+    function UpdateCore(account: Account, order: Order, fill: Fill): Account
         requires IsValidAccount(account)
         requires IsValidOrder(order)
         requires IsValidFill(fill)
@@ -240,5 +240,48 @@ module AccountOps {
             updatedPositions,
             updatedOrders
         )
+    }
+
+    method Deposit(account: Account, id: LedgerId, amount: Money, timestamp: nat) returns (result: Account)
+    {
+        expect IsValidAccount(account);
+        expect IsValidLedgerId(id);
+        expect IsPositive(amount);
+        expect !ContainsLedgerId(account.ledger.entries, id);
+        result := DepositCore(account, id, amount, timestamp);
+    }
+
+    method Withdraw(account: Account, id: LedgerId, amount: Money, timestamp: nat) returns (result: Account)
+    {
+        expect IsValidAccount(account);
+        expect IsValidLedgerId(id);
+        expect IsPositive(amount);
+        expect !ContainsLedgerId(account.ledger.entries, id);
+        expect Gte(account.cash, amount);
+        result := WithdrawCore(account, id, amount, timestamp);
+    }
+
+    method PlaceOrder(account: Account, order: Order) returns (result: Account)
+    {
+        expect IsValidAccount(account);
+        expect IsValidOrder(order);
+        expect !ExistsOrder(account.orders, order.orderId);
+        result := PlaceOrderCore(account, order);
+    }
+
+    method Update(account: Account, order: Order, fill: Fill) returns (result: Account)
+    {
+        expect IsValidAccount(account);
+        expect IsValidOrder(order);
+        expect IsValidFill(fill);
+        expect order.orderId == fill.orderId;
+        expect order.symbol == fill.symbol;
+        expect CanAcceptFill(order.status);
+        expect fill.quantity > 0;
+        expect fill.quantity <= RemainingQuantity(order);
+        expect order.side == Buy || order.side == Sell;
+        expect order.side == Buy || ExistsPosition(account.positions, order.symbol);
+        expect order.side == Sell ==> ExistsPosition(account.positions, order.symbol) && GetPosition(account.positions, order.symbol).quantity >= fill.quantity;
+        result := UpdateCore(account, order, fill);
     }
 }
