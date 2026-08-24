@@ -25,7 +25,6 @@ if __name__ == "__main__":
     logger.Log("Example", f"Initialized client with cash: {vqc_client.account.cash}")
     logger.Log("Example", f"Broker time: {vqc_client.broker.get_clock().timestamp}")
     logger.Log("Diagnostics", DisplayLedger(vqc_client.account.ledger))
-    symbols = ["GLD", "SLV"]
     getattr(schedule.every(BUY_INTERVAL), BUY_INTERVAL_UNIT).do(
         buy_gold_and_silver,
         vqc_client=vqc_client,
