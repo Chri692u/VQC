@@ -31,14 +31,25 @@ if str(CODE_PY) not in sys.path:
     sys.path.insert(0, str(CODE_PY))
 
 from _dafny import HaltException
+from _dafny import Seq
 import AccountOps as AccountOpsModule
 from bindings.vqc_currency import Money
-from bindings.vqc_types import Account, FillRecord, OrderRecord
+from bindings.vqc_types import Account, FillRecord, OrderRecord, PositionRecord
 
 AccountOps = AccountOpsModule.default__
 
 def NewAccount() -> Account:
     return AccountOps.NewAccount()
+
+
+def Bootstrap(
+    cash: Money,
+    positions: list[PositionRecord],
+    orders: list[OrderRecord],
+    ledger_id: int = 1,
+    timestamp: int = 0,
+) -> Account:
+    return AccountOps.Bootstrap(cash, Seq(positions), Seq(orders), ledger_id, timestamp)
 
 
 def Deposit(account: Account, amount: Money, ledger_id: int = 1, timestamp: int = 0) -> Account:
@@ -53,5 +64,5 @@ def PlaceOrder(account: Account, order: OrderRecord) -> Account:
     return AccountOps.PlaceOrder(account, order)
 
 
-def Update(account: Account, order: OrderRecord, fill: FillRecord) -> Account:
-    return AccountOps.Update(account, order, fill)
+def Update(account: Account, fill: FillRecord) -> Account:
+    return AccountOps.Update(account, fill)

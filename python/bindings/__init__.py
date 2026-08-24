@@ -1,6 +1,6 @@
 """Public bindings for the generated Dafny VQC runtime."""
 
-from .vqc_account import Deposit, NewAccount, PlaceOrder, Update, Withdraw
+from .vqc_account import Bootstrap, Deposit, NewAccount, PlaceOrder, Update, Withdraw
 from .vqc_currency import Cost, Money, Sum
 from .vqc_types import (
     Account,
@@ -34,6 +34,7 @@ __all__ = [
     "FillRecord",
     "PositionRecord",
     "NewAccount",
+    "Bootstrap",
     "Deposit",
     "Withdraw",
     "PlaceOrder",
