@@ -42,6 +42,10 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(len(account.orders), 1)
         self.assertEqual(len(account.ledger), 1)
         self.assertTrue(account.ledger[0].is_Opening)
+        self.assertEqual(account.ledger[0].cash, cash)
+        self.assertEqual(account.ledger[0].positions[0], position)
+        self.assertEqual(account.ledger[0].orders[0], order)
+        self.assertEqual(account.ledger[0].timestamp, 9)
         self.assertTrue(VQC.IsValidAccount(account))
 
     def test_client_bootstraps_then_applies_a_subsequent_fill(self):
@@ -87,6 +91,25 @@ class BootstrapTests(unittest.TestCase):
         client.HandleTradeUpdate(update)
 
         self.assertEqual(len(client.account.orders), 1)
+        self.assertTrue(VQC.IsValidAccount(client.account))
+
+    def test_client_applies_a_non_fill_lifecycle_event(self):
+        client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
+        update = SimpleNamespace(
+            event="canceled",
+            order=SimpleNamespace(
+                id="broker-order-1",
+                symbol="GLD",
+                side="buy",
+                qty="2",
+                filled_qty="0",
+                status="canceled",
+            ),
+        )
+
+        client.HandleTradeUpdate(update)
+
+        self.assertTrue(client.account.orders[0].status.is_Cancelled)
         self.assertTrue(VQC.IsValidAccount(client.account))
 
 

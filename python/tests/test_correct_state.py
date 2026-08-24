@@ -37,6 +37,24 @@ class DafnyStateTests(unittest.TestCase):
         )
 
         self.assertEqual(len(account.orders), 2)
+        self.assertTrue(account.orders[0].status.is_Accepted)
+        self.assertTrue(VQC.IsValidAccount(account))
+
+    def test_full_sell_removes_the_active_position_but_keeps_the_trade(self):
+        account = VQC.PlaceOrder(
+            VQC.NewAccount(),
+            VQC.Order(1, "GLD", 1, "buy", "market", "new", 0),
+        )
+        account = VQC.Update(account, VQC.Fill(1, 1, "GLD", 1, 100, 0))
+        account = VQC.PlaceOrder(
+            account,
+            VQC.Order(2, "GLD", 1, "sell", "market", "new", 0),
+        )
+        account = VQC.Update(account, VQC.Fill(2, 2, "GLD", 1, 110, 0))
+
+        self.assertEqual(len(account.positions), 0)
+        self.assertEqual(len(account.ledger), 2)
+        self.assertTrue(account.ledger[1].is_Trade)
         self.assertTrue(VQC.IsValidAccount(account))
 
 
