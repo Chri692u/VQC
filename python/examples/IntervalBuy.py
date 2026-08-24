@@ -6,32 +6,34 @@ import schedule
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vqc_client import VQCClient
-from vqc_diagnostics import DisplayLedger
+from vqc_diagnostics import DisplayLedger, Logger
 
 BUY_INTERVAL = 1
 BUY_INTERVAL_UNIT = "minutes"
 
-def buy_gold_and_silver(vqc_client: VQCClient):
-    print("Starting interval buy for GLD and SLV.")
+def buy_gold_and_silver(vqc_client: VQCClient, logger: Logger):
+    logger.Log("Example", "Starting interval buy for GLD and SLV.")
     for symbol in ["GLD", "SLV"]:
         try:
             vqc_client.Buy(symbol, 1)
-        except Exception as e:
-            pass
+        except Exception as error:
+            logger.Log("Example", f"Could not submit {symbol}: {error}")
 
 if __name__ == "__main__":
-    vqc_client = VQCClient()
-    print(f"Initialized VQCClient with account cash: {vqc_client.account.cash}")
-    print(f"At broker time: {vqc_client.broker.get_clock().timestamp}")
-    print(DisplayLedger(vqc_client.account.ledger))
+    logger = Logger(mute=False)
+    vqc_client = VQCClient(logger=logger)
+    logger.Log("Example", f"Initialized client with cash: {vqc_client.account.cash}")
+    logger.Log("Example", f"Broker time: {vqc_client.broker.get_clock().timestamp}")
+    logger.Log("Diagnostics", DisplayLedger(vqc_client.account.ledger))
     symbols = ["GLD", "SLV"]
     getattr(schedule.every(BUY_INTERVAL), BUY_INTERVAL_UNIT).do(
         buy_gold_and_silver,
         vqc_client=vqc_client,
+        logger=logger,
     )
     try:
         while True:
             schedule.run_pending()
             time.sleep(1)
     except KeyboardInterrupt:
-        print("Stopped.")
+        logger.Log("Example", "Stopped.")

@@ -2,8 +2,23 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from typing import Any
+
+
+@dataclass
+class Logger:
+    """Small console logger that can suppress all VQC output."""
+
+    mute: bool = False
+
+    def Log(self, component: str, message: str) -> None:
+        """Print one consistently tagged message unless logging is muted."""
+        if self.mute:
+            return
+        prefix = f"[VQC][{component}]"
+        print("\n".join(f"{prefix} {line}" for line in message.splitlines()))
 
 
 def ReportException(error: Exception) -> str:
@@ -37,7 +52,7 @@ def DisplayAccount(account: Any) -> str:
 
     return "\n".join(
         [
-            "VQC Account",
+            "Account",
             f"  Cash: {account.cash}",
             "  Positions:",
             *(position_lines or ["    none"]),
@@ -50,7 +65,7 @@ def DisplayAccount(account: Any) -> str:
 
 def DisplayLedger(ledger: Any) -> str:
     """Format a generated Dafny ledger sequence as concise readable entries."""
-    lines = ["VQC Ledger"]
+    lines = ["Ledger"]
     for entry in ledger:
         entry_id = getattr(entry, "id_", "unknown")
         if getattr(entry, "is_Opening", False):
@@ -73,4 +88,4 @@ def DisplayLedger(ledger: Any) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["ReportException", "DisplayAccount", "DisplayLedger"]
+__all__ = ["Logger", "ReportException", "DisplayAccount", "DisplayLedger"]
