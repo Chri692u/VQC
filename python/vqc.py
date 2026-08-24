@@ -7,33 +7,6 @@ Dafny Python modules that are loaded below.
 
 from __future__ import annotations
 
-import subprocess
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-ACCOUNT_PY = REPO_ROOT / "compiled" / "py" / "Account-py"
-ACTUAL_ACCOUNT_PY = REPO_ROOT / "compiled" / "py" / "Account-py-py"
-
-if not ACTUAL_ACCOUNT_PY.exists():
-    subprocess.run(
-        [
-            "dafny",
-            "build",
-            "src/Account.dfy",
-            "--target:py",
-            "--output:" + str(ACCOUNT_PY),
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-
-ACCOUNT_PY = ACTUAL_ACCOUNT_PY
-
-if str(ACCOUNT_PY) not in sys.path:
-    sys.path.insert(0, str(ACCOUNT_PY))
-
-from _dafny import HaltException
 from bindings import (
     Account,
     Bootstrap,
@@ -60,6 +33,11 @@ from bindings import (
     Update,
     Withdraw,
 )
+from bindings.vqc_dafny_core import EnsureDafnyCore
+
+EnsureDafnyCore()
+
+from _dafny import HaltException
 
 class VQC:
     HaltException = HaltException

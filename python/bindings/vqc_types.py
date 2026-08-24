@@ -3,32 +3,11 @@ API Bindings for the VQC types.
 """
 from __future__ import annotations
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
-import subprocess
-import sys
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-CODE_PY = REPO_ROOT / "compiled" / "py" / "Account-py"
-ACTUAL_CODE_PY = REPO_ROOT / "compiled" / "py" / "Account-py-py"
+from bindings.vqc_dafny_core import EnsureDafnyCore
 
-if not ACTUAL_CODE_PY.exists():
-    subprocess.run(
-        [
-            "dafny",
-            "build",
-            "src/Account.dfy",
-            "--target:py",
-            "--output:" + str(CODE_PY),
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-
-CODE_PY = ACTUAL_CODE_PY
-
-if str(CODE_PY) not in sys.path:
-    sys.path.insert(0, str(CODE_PY))
+EnsureDafnyCore()
 
 from _dafny import HaltException
 import Orders as OrdersModule
