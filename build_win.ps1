@@ -17,7 +17,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $srcDir = Join-Path $PSScriptRoot 'src'
-$entryFile = Join-Path $srcDir 'Execution.dfy'
+$entryFile = Join-Path $srcDir 'Account.dfy'
 
 $outputRoot = Join-Path $PSScriptRoot 'compiled'
 $outputDir = Join-Path $outputRoot $CompileTarget
