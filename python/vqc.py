@@ -9,13 +9,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from decimal import Decimal
 from pathlib import Path
-from typing import Any
-
-# ---------------------------------------------------------------------------
-# Generated runtime setup
-# ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACCOUNT_PY = REPO_ROOT / "compiled" / "py" / "Account-py"
@@ -41,22 +35,27 @@ if str(ACCOUNT_PY) not in sys.path:
 
 from _dafny import HaltException
 from bindings import (
+    Account,
     ApplyFill,
     Cancel,
     Cost,
     Deposit,
     ExecutionValue,
     Fill,
+    FillRecord,
     IsValidAccount,
     IsValidFill,
     IsValidLedger,
     IsValidOrder,
     IsValidPosition,
+    Ledger,
     Money,
     NewAccount,
     Order,
+    OrderRecord,
     PlaceOrder,
     Position,
+    PositionRecord,
     Reject,
     RemainingQuantity,
     SetOrderStatus,
@@ -67,14 +66,14 @@ from bindings import (
     Withdraw,
 )
 
-# ---------------------------------------------------------------------------
-# Public facade
-# ---------------------------------------------------------------------------
-
-
 class VQC:
     HaltException = HaltException
     Money = Money
+    Account = Account
+    Ledger = Ledger
+    OrderRecord = OrderRecord
+    FillRecord = FillRecord
+    PositionRecord = PositionRecord
     NewAccount = NewAccount
     Deposit = Deposit
     Withdraw = Withdraw
@@ -102,6 +101,11 @@ class VQC:
 
 __all__ = [
     "Money",
+    "Account",
+    "Ledger",
+    "OrderRecord",
+    "FillRecord",
+    "PositionRecord",
     "HaltException",
     "VQC",
     "NewAccount",
