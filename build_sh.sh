@@ -21,7 +21,7 @@ compile_target="${1:-py}"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 src_dir="$script_dir/src"
-entry_file="$src_dir/Execution.dfy"
+entry_file="$src_dir/Account.dfy"
 output_root="$script_dir/compiled"
 output_dir="$output_root/$compile_target"
 output_file="$output_dir/VQC.$compile_target"
