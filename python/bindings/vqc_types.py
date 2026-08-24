@@ -33,12 +33,10 @@ if str(CODE_PY) not in sys.path:
 from _dafny import HaltException
 import Orders as OrdersModule
 import Types as TypesModule
-import Execution as ExecutionModule
 import Validation as ValidationModule
 
 Orders = OrdersModule.default__
 Types = TypesModule
-Execution = ExecutionModule.default__
 Validation = ValidationModule.default__
 
 Account = Types.Account_Account
@@ -126,7 +124,7 @@ def StatusEnum(status: str) -> Any:
 RemainingQuantity = Orders.RemainingQuantity
 
 
-def SetStatus(order: Any, new_status: str) -> Any:
+def _SetStatus(order: Any, new_status: str) -> Any:
     return Orders.SetStatus(order, StatusEnum(new_status))
 
 
@@ -135,7 +133,7 @@ def SetOrderStatus(account: Any, order_id: int, new_status: str) -> Any:
     found = False
     for order in account.orders:
         if order.orderId == order_id:
-            updated_orders.append(SetStatus(order, new_status))
+            updated_orders.append(_SetStatus(order, new_status))
             found = True
         else:
             updated_orders.append(order)
@@ -148,11 +146,6 @@ def SetOrderStatus(account: Any, order_id: int, new_status: str) -> Any:
         updated_orders,
     )
 
-
-ApplyFill = Orders.ApplyFill
-Cancel = Orders.Cancel
-Reject = Orders.Reject
-ExecutionValue = Execution.ExecutionValue
 
 IsValidOrder = Validation.IsValidOrder
 IsValidFill = Validation.IsValidFill

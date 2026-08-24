@@ -62,11 +62,11 @@ account = VQC.Update(account, fill)
 type aliases are `VQC.Account`, `VQC.Ledger`, `VQC.OrderRecord`,
 `VQC.FillRecord`, and `VQC.PositionRecord`.
 
-The bindings also expose these verified lower-level operations and predicates:
+The bindings also expose these selected verified lower-level operations and
+predicates:
 
-- Money and execution: `VQC.Sum`, `VQC.Cost`, `VQC.ExecutionValue`.
-- Orders: `VQC.RemainingQuantity`, `VQC.ApplyFill`, `VQC.SetStatus`,
-  `VQC.SetOrderStatus`, `VQC.Cancel`, `VQC.Reject`.
+- Money: `VQC.Sum`, `VQC.Cost`.
+- Orders: `VQC.RemainingQuantity`, `VQC.SetOrderStatus`.
 - Predicates: `VQC.IsValidOrder`, `VQC.IsValidFill`, `VQC.IsValidPosition`,
   `VQC.IsValidLedger`, `VQC.IsValidAccount`.
 

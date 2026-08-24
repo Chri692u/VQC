@@ -36,12 +36,9 @@ if str(ACCOUNT_PY) not in sys.path:
 from _dafny import HaltException
 from bindings import (
     Account,
-    ApplyFill,
     Bootstrap,
-    Cancel,
     Cost,
     Deposit,
-    ExecutionValue,
     Fill,
     FillRecord,
     IsValidAccount,
@@ -57,12 +54,9 @@ from bindings import (
     PlaceOrder,
     Position,
     PositionRecord,
-    Reject,
     RemainingQuantity,
     SetOrderStatus,
-    SetStatus,
     Sum,
-    Types,
     Update,
     Withdraw,
 )
@@ -87,18 +81,12 @@ class VQC:
     Sum = Sum
     Cost = Cost
     RemainingQuantity = RemainingQuantity
-    SetStatus = SetStatus
     SetOrderStatus = SetOrderStatus
-    ApplyFill = ApplyFill
-    Cancel = Cancel
-    Reject = Reject
-    ExecutionValue = ExecutionValue
     IsValidOrder = IsValidOrder
     IsValidFill = IsValidFill
     IsValidPosition = IsValidPosition
     IsValidLedger = IsValidLedger
     IsValidAccount = IsValidAccount
-    Types = Types
 
 
 __all__ = [
@@ -122,16 +110,10 @@ __all__ = [
     "Sum",
     "Cost",
     "RemainingQuantity",
-    "SetStatus",
     "SetOrderStatus",
-    "ApplyFill",
-    "Cancel",
-    "Reject",
-    "ExecutionValue",
     "IsValidOrder",
     "IsValidFill",
     "IsValidPosition",
     "IsValidLedger",
     "IsValidAccount",
-    "Types",
 ]
