@@ -1,20 +1,22 @@
-/** Type-safe constructors for the Dafny-generated VQC value types. */
+/** Bindings for VQC record construction, order utility, and validation. */
 
-declare function require(moduleName: string): any;
+import { Dafny, IntegerInput, Natural, StringValue } from "./vqc_dafny_core";
+import { Money } from "./vqc_currency";
 
-const Dafny = require("../compiled/VQC.js");
+declare const accountBrand: unique symbol;
+declare const ledgerBrand: unique symbol;
+declare const orderBrand: unique symbol;
+declare const fillBrand: unique symbol;
+declare const positionBrand: unique symbol;
 
-type GeneratedInteger = {
-    isNegative(): boolean;
-    isInteger(): boolean;
-    toFixed(): string;
-};
+export type Account = { readonly [accountBrand]: "Account" };
+export type Ledger = { readonly [ledgerBrand]: "Ledger" };
+export type OrderRecord = { readonly [orderBrand]: "Order" };
+export type FillRecord = { readonly [fillBrand]: "Fill" };
+export type PositionRecord = { readonly [positionBrand]: "Position" };
 
-export type MoneyValue = GeneratedInteger;
-export type OrderId = GeneratedInteger;
-export type ExecutionId = GeneratedInteger;
-export type LedgerId = GeneratedInteger;
 export type OrderSide = "buy" | "sell";
+export type OrderType = "market" | "limit";
 export type OrderStatus =
     | "new"
     | "accepted"
@@ -23,158 +25,120 @@ export type OrderStatus =
     | "cancelled"
     | "rejected";
 
-export type OrderRecord = {
-    dtor_orderId: OrderId;
-    dtor_symbol: unknown;
-    dtor_quantity: GeneratedInteger;
-    dtor_side: unknown;
-    dtor_orderType: unknown;
-    dtor_status: unknown;
-    dtor_filledQuantity: GeneratedInteger;
-};
+type DafnyOrderSide = { readonly _dafnyOrderSide: unique symbol };
+type DafnyOrderType = { readonly _dafnyOrderType: unique symbol };
+type DafnyOrderStatus = { readonly _dafnyOrderStatus: unique symbol };
 
-export type FillRecord = {
-    dtor_executionId: ExecutionId;
-    dtor_orderId: OrderId;
-    dtor_symbol: unknown;
-    dtor_quantity: GeneratedInteger;
-    dtor_price: MoneyValue;
-    dtor_timestamp: GeneratedInteger;
-};
-
-export type PositionRecord = {
-    dtor_symbol: unknown;
-    dtor_quantity: GeneratedInteger;
-    dtor_averagePrice: MoneyValue;
-};
-
-export type Ledger = unknown;
-export type Account = unknown;
-
-export type IntegerInput = string | number | bigint;
-
-export interface OrderInput {
-    orderId: IntegerInput;
-    symbol: string;
-    quantity: IntegerInput;
-    side?: OrderSide;
-    status?: OrderStatus;
-    filledQuantity?: IntegerInput;
-    limitPrice?: IntegerInput;
-}
-
-export interface FillInput {
-    executionId: IntegerInput;
-    orderId: IntegerInput;
-    symbol: string;
-    quantity: IntegerInput;
-    price: IntegerInput;
-    timestamp: IntegerInput;
-}
-
-export interface PositionInput {
-    symbol: string;
-    quantity: IntegerInput;
-    averagePrice: IntegerInput;
-}
-
-function ToInteger(value: IntegerInput, name: string): GeneratedInteger {
-    if (typeof value === "number" && (!Number.isSafeInteger(value))) {
-        throw new TypeError(`${name} must be a safe integer when passed as a number`);
+function SideEnum(side: OrderSide): DafnyOrderSide {
+    if (side === "buy") {
+        return Dafny.Types.OrderSide.create_Buy() as DafnyOrderSide;
     }
-
-    const text = value.toString();
-    if (!/^-?\d+$/.test(text)) {
-        throw new TypeError(`${name} must be an integer`);
+    if (side === "sell") {
+        return Dafny.Types.OrderSide.create_Sell() as DafnyOrderSide;
     }
-
-    return new Dafny.BigNumber(text);
+    throw new Error(`unsupported side: ${side}`);
 }
 
-function ToNatural(value: IntegerInput, name: string): GeneratedInteger {
-    const integer = ToInteger(value, name);
-    if (integer.isNegative()) {
-        throw new RangeError(`${name} must be non-negative`);
-    }
-    return integer;
-}
-
-function ToDafnyString(value: string, name: string): unknown {
-    if (typeof value !== "string") {
-        throw new TypeError(`${name} must be a string`);
-    }
-    return Dafny._dafny.Seq.UnicodeFromString(value);
-}
-
-function ToSide(side: OrderSide): unknown {
-    return side === "buy"
-        ? Dafny.Types.OrderSide.create_Buy()
-        : Dafny.Types.OrderSide.create_Sell();
-}
-
-function ToStatus(status: OrderStatus): unknown {
+/** Converts a public status string to the generated Dafny status value. */
+export function StatusEnum(status: OrderStatus): DafnyOrderStatus {
     switch (status) {
-        case "new": return Dafny.Types.OrderStatus.create_New();
-        case "accepted": return Dafny.Types.OrderStatus.create_Accepted();
-        case "partially_filled": return Dafny.Types.OrderStatus.create_PartiallyFilled();
-        case "filled": return Dafny.Types.OrderStatus.create_Filled();
-        case "cancelled": return Dafny.Types.OrderStatus.create_Cancelled();
-        case "rejected": return Dafny.Types.OrderStatus.create_Rejected();
+        case "new": return Dafny.Types.OrderStatus.create_New() as DafnyOrderStatus;
+        case "accepted": return Dafny.Types.OrderStatus.create_Accepted() as DafnyOrderStatus;
+        case "partially_filled": return Dafny.Types.OrderStatus.create_PartiallyFilled() as DafnyOrderStatus;
+        case "filled": return Dafny.Types.OrderStatus.create_Filled() as DafnyOrderStatus;
+        case "cancelled": return Dafny.Types.OrderStatus.create_Cancelled() as DafnyOrderStatus;
+        case "rejected": return Dafny.Types.OrderStatus.create_Rejected() as DafnyOrderStatus;
     }
 }
 
-/** Creates a signed Dafny money value in minor units. */
-export const Money = {
-    FromMinorUnits(value: IntegerInput): MoneyValue {
-        return ToInteger(value, "money");
-    },
-
-    ToMinorUnits(value: MoneyValue): string {
-        return value.toFixed();
-    },
-};
-
-/** Creates a Dafny order record. A missing limit price means a market order. */
-export function Order(input: OrderInput): OrderRecord {
-    const orderType = input.limitPrice === undefined
-        ? Dafny.Types.OrderType.create_Market()
-        : Dafny.Types.OrderType.create_Limit(Money.FromMinorUnits(input.limitPrice));
+/** Creates a VQC order record. */
+export function Order(
+    orderId: IntegerInput,
+    symbol: string,
+    quantity: IntegerInput,
+    side: OrderSide = "buy",
+    orderType: OrderType = "market",
+    status: OrderStatus = "new",
+    filledQuantity: IntegerInput = 0,
+    limitPrice?: Money,
+): OrderRecord {
+    let orderTypeEnum: DafnyOrderType;
+    if (orderType === "market") {
+        orderTypeEnum = Dafny.Types.OrderType.create_Market() as DafnyOrderType;
+    } else if (orderType === "limit") {
+        if (limitPrice === undefined) {
+            throw new Error("limit order requires a limitPrice");
+        }
+        orderTypeEnum = Dafny.Types.OrderType.create_Limit(limitPrice) as DafnyOrderType;
+    } else {
+        throw new Error(`unsupported order type: ${orderType}`);
+    }
 
     return Dafny.Types.Order.create_Order(
-        ToNatural(input.orderId, "orderId"),
-        ToDafnyString(input.symbol, "symbol"),
-        ToNatural(input.quantity, "quantity"),
-        ToSide(input.side ?? "buy"),
-        orderType,
-        ToStatus(input.status ?? "new"),
-        ToNatural(input.filledQuantity ?? 0, "filledQuantity"),
-    );
+        Natural(orderId, "orderId"),
+        StringValue(symbol, "symbol"),
+        Natural(quantity, "quantity"),
+        SideEnum(side),
+        orderTypeEnum,
+        StatusEnum(status),
+        Natural(filledQuantity, "filledQuantity"),
+    ) as OrderRecord;
 }
 
-/** Creates a Dafny fill record for an existing order. */
-export function Fill(input: FillInput): FillRecord {
+/** Creates a VQC fill record for an existing order. */
+export function Fill(
+    executionId: IntegerInput,
+    orderId: IntegerInput,
+    symbol: string,
+    quantity: IntegerInput,
+    price: Money,
+    timestamp: IntegerInput,
+): FillRecord {
     return Dafny.Types.Fill.create_Fill(
-        ToNatural(input.executionId, "executionId"),
-        ToNatural(input.orderId, "orderId"),
-        ToDafnyString(input.symbol, "symbol"),
-        ToNatural(input.quantity, "quantity"),
-        Money.FromMinorUnits(input.price),
-        ToNatural(input.timestamp, "timestamp"),
-    );
+        Natural(executionId, "executionId"),
+        Natural(orderId, "orderId"),
+        StringValue(symbol, "symbol"),
+        Natural(quantity, "quantity"),
+        price,
+        Natural(timestamp, "timestamp"),
+    ) as FillRecord;
 }
 
-/** Creates a Dafny long-position record. */
-export function Position(input: PositionInput): PositionRecord {
+/** Creates a VQC long-position record. */
+export function Position(
+    symbol: string,
+    quantity: IntegerInput,
+    averagePrice: Money,
+): PositionRecord {
     return Dafny.Types.Position.create_Position(
-        ToDafnyString(input.symbol, "symbol"),
-        ToNatural(input.quantity, "quantity"),
-        Money.FromMinorUnits(input.averagePrice),
-    );
+        StringValue(symbol, "symbol"),
+        Natural(quantity, "quantity"),
+        averagePrice,
+    ) as PositionRecord;
 }
 
-/** Converts a JavaScript array to the Dafny sequence representation. */
-export function Sequence<T>(values: readonly T[]): unknown {
-    return Dafny._dafny.Seq.of(...values);
+export function RemainingQuantity(order: OrderRecord): string {
+    return Dafny.Orders.__default.RemainingQuantity(order).toFixed();
+}
+
+export function IsValidOrder(order: OrderRecord): boolean {
+    return Dafny.Validation.__default.IsValidOrder(order);
+}
+
+export function IsValidFill(fill: FillRecord): boolean {
+    return Dafny.Validation.__default.IsValidFill(fill);
+}
+
+export function IsValidPosition(position: PositionRecord): boolean {
+    return Dafny.Validation.__default.IsValidPosition(position);
+}
+
+export function IsValidLedger(ledger: Ledger): boolean {
+    return Dafny.Validation.__default.IsValidLedger(ledger);
+}
+
+export function IsValidAccount(account: Account): boolean {
+    return Dafny.Validation.__default.IsValidAccount(account);
 }
 
 export const HaltException = Dafny._dafny.HaltException;

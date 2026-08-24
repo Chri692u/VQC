@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "TypeScript and JavaScript runtime boundary for VQC.",
   "scripts": {
-    "build": "tsc --target ES2022 --module commonjs --strict bindings/vqc_types.ts"
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "bignumber.js": "^11.1.5"
