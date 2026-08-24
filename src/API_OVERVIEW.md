@@ -1,71 +1,78 @@
 # VQC API Overview
 
-This document describes the public-facing Dafny API. It is intentionally limited to the operations a library consumer or integrator would use, and it excludes internal implementation functions that are only used to implement account state transitions.
+This document describes only the verified Dafny public API and the matching
+Python bindings. It excludes internal helpers, proof lemmas, and broker/client
+integration code.
 
-## Module: Types
+## Dafny types
 
-Core shared domain types used throughout the system.
+Defined by `Types.dfy` and exposed by the Python facade as `VQC` types.
 
-### Data types
+| Dafny type | Meaning | Python exposure |
+| --- | --- | --- |
+| `Money` | Signed fixed-scale monetary value. | `VQC.Money` |
+| `OrderId`, `ExecutionId`, `LedgerId` | Positive domain identifiers. | Integers are accepted by constructors/bindings. |
+| `OrderSide` | `Buy` or `Sell`. | `"buy"` or `"sell"` in `VQC.Order`. |
+| `OrderType` | `Market` or `Limit(price)`. | `"market"` or `"limit"` in `VQC.Order`. |
+| `OrderStatus` | Order lifecycle status. | Status strings in `VQC.Order` / `VQC.SetOrderStatus`. |
+| `Order` | Authoritative order: ID, symbol, quantity, side, type, status, and filled quantity. | `VQC.Order(...)`, `VQC.OrderRecord` |
+| `Fill` | A priced execution against an order: execution ID, order ID, symbol, quantity, price, and timestamp. | `VQC.Fill(...)`, `VQC.FillRecord` |
+| `Position` | Symbol, non-negative quantity, and average price. | `VQC.Position(...)`, `VQC.PositionRecord` |
+| `LedgerEntry` | `Opening`, `Deposit`, `Withdrawal`, or `Trade`. | Exposed through `VQC.Account.ledger`. |
+| `Ledger` | Append-only sequence of ledger entries. | `VQC.Ledger`; generated account values expose its entries as `account.ledger`. |
+| `Account` | Cash, ledger, positions, and orders. | `VQC.Account` |
 
-- `Money` — immutable monetary value wrapper around `int` intended as fixed-scale linear integers
-- `OrderId` — order identifier
-- `ExecutionId` — execution/fill identifier
-- `LedgerId` — ledger entry identifier
-- `OrderSide` — `Buy | Sell`
-- `OrderType` — `Market | Limit(limitPrice: Money)`
-- `OrderStatus` — `New | Accepted | PartiallyFilled | Filled | Cancelled | Rejected`
-- `Order` — canonical order record
-- `Fill` — execution record
-- `Position` — symbol + quantity + average price
-- `LedgerEntry` — `Deposit | Withdrawal | Trade`
-- `Ledger` — append-only ledger history as `seq<LedgerEntry>`
-- `Account` — cash + ledger + positions + orders
+`Money` may be negative, including account cash. Positions remain long-only in
+the current model.
 
-### Utility
+## Dafny account API
 
-- `EntryId(entry: LedgerEntry): LedgerId` — extracts the ledger id from any entry variant
+The public methods in `AccountOps` are listed below. Each returns an `Account`
+and has `ensures IsValidAccount(result)`.
 
----
+| Dafny method | Preconditions, in domain terms | Effect |
+| --- | --- | --- |
+| `NewAccount()` | None. | Creates an empty account. |
+| `Bootstrap(cash, positions, orders, id, timestamp)` | Valid unique positions and orders, lifecycle-consistent orders, and a valid ledger ID. | Creates one `Opening` ledger entry containing the supplied trusted state. |
+| `Deposit(account, id, amount, timestamp)` | Valid account, fresh ledger ID, positive amount. | Adds cash and appends a `Deposit`. |
+| `Withdraw(account, id, amount, timestamp)` | Deposit preconditions and cash at least the amount. | Subtracts cash and appends a `Withdrawal`. |
+| `PlaceOrder(account, order)` | Valid account and a valid order with a fresh order ID. | Adds the order. |
+| `Update(account, fill)` | Valid account; an existing authoritative order; a fill applicable to it; sufficient position quantity for a sell. | Updates that order, cash, position, and appends a `Trade` with a fresh ledger ID. |
 
-## Module: Currency
+`Update` deliberately accepts no `Order` argument. The fill's `orderId` selects
+the authoritative order stored in the account; a fill cannot create an order.
 
-Core arithmetic and comparison functions for money.
+## Python bindings
 
-### Constructors and arithmetic
+The following names mirror the verified Dafny surface:
 
-- `Add(a: Money, b: Money): Money`
-- `Sub(a: Money, b: Money): Money`
-- `Neg(a: Money): Money`
-- `Abs(a: Money): Money`
-- `Sum(moneys: seq<Money>): Money`
-- `Cost(qty: nat, price: Money): Money`
+```python
+from vqc import VQC
 
-### Comparison predicates
+account = VQC.NewAccount()
+account = VQC.Bootstrap(cash, positions, orders, ledger_id=1, timestamp=0)
+account = VQC.Deposit(account, amount, ledger_id=2, timestamp=0)
+account = VQC.Withdraw(account, amount, ledger_id=3, timestamp=0)
+account = VQC.PlaceOrder(account, order)
+account = VQC.Update(account, fill)
+```
 
-- `Eq(a, b)`
-- `Lt(a, b)`
-- `Lte(a, b)`
-- `Gt(a, b)`
-- `Gte(a, b)`
+`VQC.Bootstrap` accepts Python lists of `VQC.PositionRecord` and
+`VQC.OrderRecord`; the binding converts them to Dafny sequences. The exposed
+type aliases are `VQC.Account`, `VQC.Ledger`, `VQC.OrderRecord`,
+`VQC.FillRecord`, and `VQC.PositionRecord`.
 
----
+The bindings also expose these verified lower-level operations and predicates:
 
-## Module: AccountOps
+- Money and execution: `VQC.Sum`, `VQC.Cost`, `VQC.ExecutionValue`.
+- Orders: `VQC.RemainingQuantity`, `VQC.ApplyFill`, `VQC.SetStatus`,
+  `VQC.SetOrderStatus`, `VQC.Cancel`, `VQC.Reject`.
+- Predicates: `VQC.IsValidOrder`, `VQC.IsValidFill`, `VQC.IsValidPosition`,
+  `VQC.IsValidLedger`, `VQC.IsValidAccount`.
 
-Account-level operations that update cash, ledger, positions, and orders together.
+## Current validity boundary
 
-### Constructor
-
-- `NewAccount(): Account`
-
-### Account transformations
-
-- `Deposit(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account`
-- `Withdraw(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account`
-- `PlaceOrder(account: Account, order: Order): Account`
-- `Update(account: Account, order: Order, fill: Fill): Account`
-
-These operations are the main account-level API for applying financial events while preserving the verified invariants for ledger uniqueness, order validity, and position consistency.
-
----
+`IsValidAccount` currently proves structural consistency: valid ledger entries
+with unique ledger IDs, valid positions with unique symbols, and valid orders
+with unique order IDs. Reconciliation invariants such as reconstructing cash or
+positions from the ledger are not yet part of this public contract.

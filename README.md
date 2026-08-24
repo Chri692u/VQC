@@ -1,2 +1,5 @@
-# VQC - A Verified-Quant-Core
-A formally verified accounting and portfolio state model for algorithmic trading systems. The system models money, orders, executions, positions, and account state using provable invariants to ensure consistency and correctness. It is designed to act as a trusted core between trading strategies and external broker infrastructure.
+# VQC — Verified Quant Core
+
+VQC is a Dafny-verified financial state-transition core for cash, orders, fills, positions, and ledger history.
+It bootstraps a trusted account snapshot, then composes verified deposit, withdrawal, order, and fill transitions.
+Python bindings expose the verified API; broker integration remains outside the trusted core.
