@@ -2,6 +2,10 @@
 
 ```python
 from vqc import VQC
+from vqc_broker_adapter import BrokerAdapter
+from vqc_client import VQCClient
+from vqc_diagnostics import DisplayAccount, DisplayLedger, Logger, ReportException
+from vqc_utility import VQCUtility
 ```
 
 The runtime implementation uses Python and Alpaca. All account calls return a new account; they do not mutate the input account.
@@ -54,6 +58,44 @@ cancellation, or rejection.
 | `VQC.IsValidPosition(value)` | Checks position validity. |
 | `VQC.IsValidLedger(value)` | Checks ledger validity. |
 | `VQC.IsValidAccount(value)` | Checks structural account validity. |
+
+`VQCUtility` provides small Python-side helpers used by the client: `GetField`
+reads either an object attribute or dictionary field, `GetOrderKey` extracts a
+broker order ID, `NextOrderId` finds the next VQC numeric order ID, and
+`GetOrAddId` assigns a local numeric ID to an external ID.
+
+## Alpaca client and adapters
+
+`VQCClient` is the Python broker boundary:
+
+```python
+from vqc_client import VQCClient
+
+client = VQCClient()
+client.Buy("GLD", 1)
+```
+
+On construction it bootstraps VQC from Alpaca cash, positions, and open orders.
+`Buy`, `Sell`, and `SubmitOrder` submit broker orders; broker `partial_fill` and
+`fill` events call `VQC.Update`. Other broker lifecycle events call
+`VQC.SetOrderStatus`.
+
+`BrokerAdapter` performs the conversion from Alpaca values to VQC records:
+
+- prices, cash, and average prices become scaled `VQC.Money` values;
+- timestamps become Unix seconds;
+- Alpaca order statuses become VQC status strings;
+- Alpaca positions become long-only VQC positions; a short position raises an
+  error because VQC positions cannot have negative quantity;
+- Alpaca orders and fills become `VQC.Order` and `VQC.Fill` records using the
+  VQC numeric IDs assigned by the client.
+
+## Diagnostics
+
+`Logger(mute=False)` in `vqc_diagnostics` prints tagged messages such as
+`[VQC][Client] ...`. Pass `Logger(mute=True)` to `VQCClient(logger=...)` to
+suppress client output. `DisplayAccount(account)`, `DisplayLedger(ledger)`, and
+`ReportException(error)` return readable strings for logging or printing.
 
 ## Minimal example
 
