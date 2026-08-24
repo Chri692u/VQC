@@ -43,6 +43,13 @@ module Types {
 
     // Ledger history.
     datatype LedgerEntry =
+        | Opening(
+            id: LedgerId,
+            cash: Money,
+            positions: seq<Position>,
+            orders: seq<Order>,
+            timestamp: nat
+        )
         | Deposit(id: LedgerId, amount: Money, timestamp: nat)
         | Withdrawal(id: LedgerId, amount: Money, timestamp: nat)
         | Trade(id: LedgerId, fill: Fill)
@@ -53,6 +60,7 @@ module Types {
     function EntryId(entry: LedgerEntry): LedgerId
     {
         match entry
+            case Opening(id, _, _, _, _) => id
             case Deposit(id, _, _) => id
             case Withdrawal(id, _, _) => id
             case Trade(id, _) => id

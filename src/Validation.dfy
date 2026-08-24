@@ -166,6 +166,11 @@ module Validation {
         (forall i, j :: 0 <= i < j < |orders| ==> orders[i].orderId != orders[j].orderId)
     }
 
+    predicate HasLifecycleConsistentOrders(orders: seq<Order>)
+    {
+        forall i :: 0 <= i < |orders| ==> HasValidOrderStatus(orders[i])
+    }
+
     // Execution checks.
     predicate HasValidExecutionId(fill: Fill)
     {
@@ -254,6 +259,11 @@ module Validation {
     predicate IsValidEntry(entry: LedgerEntry)
     {
         match entry
+            case Opening(id, _, positions, orders, _) =>
+                IsValidLedgerId(id) &&
+                IsValidPositionSet(positions) &&
+                IsValidOrderSet(orders) &&
+                HasLifecycleConsistentOrders(orders)
             case Deposit(id, amount, _) =>
                 IsValidLedgerId(id) && IsPositive(amount)
             case Withdrawal(id, amount, _) =>
@@ -262,10 +272,23 @@ module Validation {
                 IsValidLedgerId(id) && IsValidFill(fill)
     }
 
+    predicate IsOpeningEntry(entry: LedgerEntry)
+    {
+        match entry
+            case Opening(_, _, _, _, _) => true
+            case _ => false
+    }
+
+    predicate HasOpeningOnlyAtStart(entries: seq<LedgerEntry>)
+    {
+        forall i :: 0 <= i < |entries| && IsOpeningEntry(entries[i]) ==> i == 0
+    }
+
     predicate IsValidLedger(ledger: Ledger)
     {
         (forall i :: 0 <= i < |ledger.entries| ==> IsValidEntry(ledger.entries[i])) &&
-        AllUniqueLedgerIds(ledger.entries)
+        AllUniqueLedgerIds(ledger.entries) &&
+        HasOpeningOnlyAtStart(ledger.entries)
     }
 
     // Ledger transition predicate.
@@ -273,6 +296,7 @@ module Validation {
     {
         IsValidLedger(ledger) &&
         IsValidEntry(entry) &&
+        !IsOpeningEntry(entry) &&
         !ContainsLedgerId(ledger.entries, EntryId(entry))
     }
 

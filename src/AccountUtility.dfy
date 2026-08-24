@@ -23,18 +23,6 @@ module AccountUtility {
         LedgerId(MaxLedgerId(ledger.entries) + 1)
     }
 
-    // Every entry ID is bounded by the maximum ID of its containing sequence.
-    lemma EntryIdAtMostMaxLedgerId(entries: seq<LedgerEntry>, index: int)
-        requires 0 <= index < |entries|
-        ensures EntryId(entries[index]).value <= MaxLedgerId(entries)
-        decreases |entries|
-    {
-        if index == 0 {
-        } else {
-            EntryIdAtMostMaxLedgerId(entries[1..], index - 1);
-        }
-    }
-
     predicate ExistsOrder(orders: seq<Order>, target: OrderId)
     {
         exists i :: 0 <= i < |orders| && orders[i].orderId == target
@@ -138,4 +126,5 @@ module AccountUtility {
         else
             [positions[0]] + UpsertPosition(positions[1..], updated)
     }
+
 }

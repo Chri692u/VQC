@@ -25,6 +25,8 @@ module LedgerOps {
             Money(0)
         else
             match ledger.entries[0]
+                case Opening(_, _, _, _, _) =>
+                    TotalDeposits(Ledger(ledger.entries[1..]))
                 case Deposit(_, amount, _) =>
                     Add(amount, TotalDeposits(Ledger(ledger.entries[1..])))
                 case Withdrawal(_, _, _) =>
@@ -42,6 +44,8 @@ module LedgerOps {
             Money(0)
         else
             match ledger.entries[0]
+                case Opening(_, _, _, _, _) =>
+                    TotalWithdrawals(Ledger(ledger.entries[1..]))
                 case Deposit(_, _, _) =>
                     TotalWithdrawals(Ledger(ledger.entries[1..]))
                 case Withdrawal(_, amount, _) =>

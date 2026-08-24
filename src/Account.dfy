@@ -21,13 +21,29 @@ module AccountOps {
 
     // Returns a new empty account.
     function NewAccount(): Account
+        ensures IsValidAccount(NewAccount())
     {
         Account(Money(0), Ledger([]), [], [])
+    }
+
+    // Creates an account from one trusted broker-state snapshot.
+    function BootstrapCore(
+        cash: Money,
+        positions: seq<Position>,
+        orders: seq<Order>,
+        id: LedgerId,
+        timestamp: nat
+    ): Account
+        requires CanBootstrap(cash, positions, orders, id)
+        ensures IsValidAccount(BootstrapCore(cash, positions, orders, id, timestamp))
+    {
+        Account(cash, Ledger([Opening(id, cash, positions, orders, timestamp)]), positions, orders)
     }
 
     // Adds a deposit to the account ledger and cash balance.
     function DepositCore(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
         requires CanDeposit(account, id, amount)
+        ensures IsValidAccount(DepositCore(account, id, amount, timestamp))
     {
         var entry := LedgerEntry.Deposit(id, amount, timestamp);
         var nextLedger := Append(account.ledger, entry);
@@ -42,6 +58,7 @@ module AccountOps {
     // Removes a withdrawal from the account ledger and cash balance.
     function WithdrawCore(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
         requires CanWithdraw(account, id, amount)
+        ensures IsValidAccount(WithdrawCore(account, id, amount, timestamp))
     {
         var entry := LedgerEntry.Withdrawal(id, amount, timestamp);
         var nextLedger := Append(account.ledger, entry);
@@ -56,6 +73,7 @@ module AccountOps {
     // Adds a new order to the account.
     function PlaceOrderCore(account: Account, order: Order): Account
         requires CanPlaceOrder(account, order)
+        ensures IsValidAccount(PlaceOrderCore(account, order))
     {
         Account(
             account.cash,
@@ -66,20 +84,30 @@ module AccountOps {
     }
 
     // Updates an account with a fill against an existing order.
-    function UpdateCore(account: Account, order: Order, fill: Fill): Account
-        requires CanUpdate(account, order, fill)
+    function UpdateCore(account: Account, fill: Fill): Account
+        requires CanUpdate(account, fill)
+        ensures IsValidAccount(UpdateCore(account, fill))
     {
+        var order := GetOrder(account.orders, fill.orderId);
         var updatedOrder := Orders.ApplyFill(order, fill.quantity);
-        var updatedOrders := UpsertOrder(account.orders, updatedOrder);
+        
+        // Lemma invocation.
+        UpdateOrderPreservesValidity(account.orders, updatedOrder);
+        var updatedOrders := UpdateOrder(account.orders, updatedOrder);
         var basePosition := PositionOrEmpty(account.positions, order.symbol);
         var nextPosition :=
             if order.side == Buy then 
                 Positions.ApplyBuy(basePosition, fill) 
             else
                 Positions.ApplySell(basePosition, fill);
+
+        // Lemma invocation.
+        UpsertPositionPreservesValidity(account.positions, nextPosition);
         var updatedPositions := UpsertPosition(account.positions, nextPosition);
         var nextId := NextLedgerId(account.ledger);
         var tradeEntry := LedgerEntry.Trade(nextId, fill);
+
+        // Lemma invocation.
         NextLedgerIdIsFresh(account.ledger);
         var nextLedger := Append(account.ledger, tradeEntry);
 
@@ -99,26 +127,43 @@ module AccountOps {
     }
 
     method Deposit(account: Account, id: LedgerId, amount: Money, timestamp: nat) returns (result: Account)
+        ensures IsValidAccount(result)
     {
         expect CanDeposit(account, id, amount);
         result := DepositCore(account, id, amount, timestamp);
     }
 
+    method Bootstrap(
+        cash: Money,
+        positions: seq<Position>,
+        orders: seq<Order>,
+        id: LedgerId,
+        timestamp: nat
+    ) returns (result: Account)
+        ensures IsValidAccount(result)
+    {
+        expect CanBootstrap(cash, positions, orders, id);
+        result := BootstrapCore(cash, positions, orders, id, timestamp);
+    }
+
     method Withdraw(account: Account, id: LedgerId, amount: Money, timestamp: nat) returns (result: Account)
+        ensures IsValidAccount(result)
     {
         expect CanWithdraw(account, id, amount);
         result := WithdrawCore(account, id, amount, timestamp);
     }
 
     method PlaceOrder(account: Account, order: Order) returns (result: Account)
+        ensures IsValidAccount(result)
     {
         expect CanPlaceOrder(account, order);
         result := PlaceOrderCore(account, order);
     }
 
-    method Update(account: Account, order: Order, fill: Fill) returns (result: Account)
+    method Update(account: Account, fill: Fill) returns (result: Account)
+        ensures IsValidAccount(result)
     {
-        expect CanUpdate(account, order, fill);
-        result := UpdateCore(account, order, fill);
+        expect CanUpdate(account, fill);
+        result := UpdateCore(account, fill);
     }
 }
