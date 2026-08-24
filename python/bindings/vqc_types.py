@@ -30,7 +30,7 @@ CODE_PY = ACTUAL_CODE_PY
 if str(CODE_PY) not in sys.path:
     sys.path.insert(0, str(CODE_PY))
 
-from _dafny import HaltException
+from _dafny import HaltException, Seq
 import Orders as OrdersModule
 import Types as TypesModule
 import Validation as ValidationModule
@@ -143,7 +143,7 @@ def SetOrderStatus(account: Any, order_id: int, new_status: str) -> Any:
         account.cash,
         account.ledger,
         account.positions,
-        updated_orders,
+        Seq(updated_orders),
     )
 
 

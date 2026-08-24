@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from decimal import Decimal
-from threading import Thread
+from threading import RLock, Thread
 from typing import Any
 from uuid import uuid4
 
@@ -32,6 +32,7 @@ class VQCClient:
     order_ids: dict[str, int] = field(default_factory=dict, init=False)
     fill_ids: dict[str, int] = field(default_factory=dict, init=False)
     trade_stream_thread: Thread | None = field(default=None, init=False, repr=False)
+    state_lock: Any = field(default_factory=RLock, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.broker is None:
@@ -67,23 +68,26 @@ class VQCClient:
             BrokerAdapter.ToVQCOrder(broker_order, order_id)
             for order_id, broker_order in enumerate(broker_orders, start=1)
         ]
-        self.account = VQC.Bootstrap(VQC.Money.FromDecimal(cash), positions, orders)
-        self.order_ids = {
-            VQCUtility.GetOrderKey(broker_order): order_id
-            for order_id, broker_order in enumerate(broker_orders, start=1)
-        }
+        with self.state_lock:
+            self.account = VQC.Bootstrap(VQC.Money.FromDecimal(cash), positions, orders)
+            self.order_ids = {
+                VQCUtility.GetOrderKey(broker_order): order_id
+                for order_id, broker_order in enumerate(broker_orders, start=1)
+            }
         print("[VQC][Client] Bootstrapped account from broker state.")
 
     def NextOrderId(self) -> int:
-        return VQCUtility.NextOrderId(self.account.orders)
+        with self.state_lock:
+            return VQCUtility.NextOrderId(self.account.orders)
 
     def _SetOrderStatus(self, broker_order: Any) -> None:
         """Apply a non-execution lifecycle event reported by the broker."""
-        vqc_order_id = self.order_ids[VQCUtility.GetOrderKey(broker_order)]
-        status = BrokerAdapter.ToVQCStatus(VQCUtility.GetField(broker_order, "status", "new"))
-        if status in {"partially_filled", "filled"}:
-            raise ValueError("filled broker orders must be applied through a fill event")
-        self.account = VQC.SetOrderStatus(self.account, vqc_order_id, status)
+        with self.state_lock:
+            vqc_order_id = self.order_ids[VQCUtility.GetOrderKey(broker_order)]
+            status = BrokerAdapter.ToVQCStatus(VQCUtility.GetField(broker_order, "status", "new"))
+            if status in {"partially_filled", "filled"}:
+                raise ValueError("filled broker orders must be applied through a fill event")
+            self.account = VQC.SetOrderStatus(self.account, vqc_order_id, status)
 
     def HandleTradeUpdate(self, update: Any) -> None:
         """Apply one Alpaca trade-update event to the verified account.
@@ -91,32 +95,41 @@ class VQCClient:
         Only ``partial_fill`` and ``fill`` events call VQC.Update. All other
         lifecycle events only change the order status.
         """
-        event = str(VQCUtility.GetField(update, "event", "")).lower()
-        broker_order = VQCUtility.GetField(update, "order")
-        if broker_order is None:
-            raise ValueError("trade update is missing its order")
+        with self.state_lock:
+            event = str(VQCUtility.GetField(update, "event", "")).lower()
+            broker_order = VQCUtility.GetField(update, "order")
+            if broker_order is None:
+                raise ValueError("trade update is missing its order")
 
-        broker_order_key = VQCUtility.GetOrderKey(broker_order)
-        if broker_order_key not in self.order_ids:
-            raise ValueError(f"untracked broker order: {broker_order_key}")
+            broker_order_key = VQCUtility.GetOrderKey(broker_order)
+            if broker_order_key not in self.order_ids:
+                print(
+                    "[VQC][Reconciliation] Untracked broker order "
+                    f"{broker_order_key}; refreshing account from broker."
+                )
+                self.SyncAccountFromBroker()
+                return
 
-        if event not in {"partial_fill", "fill"}:
-            self._SetOrderStatus(broker_order)
-            return
+            if event not in {"partial_fill", "fill"}:
+                self._SetOrderStatus(broker_order)
+                return
 
-        external_execution_id = VQCUtility.GetField(update, "execution_id")
-        if external_execution_id is None:
-            raise ValueError("fill update is missing its execution ID")
-        if str(external_execution_id) in self.fill_ids:
-            return
+            external_execution_id = VQCUtility.GetField(update, "execution_id")
+            if external_execution_id is None:
+                raise ValueError("fill update is missing its execution ID")
+            external_execution_key = str(external_execution_id)
+            if external_execution_key in self.fill_ids:
+                return
 
-        vqc_order_id = self.order_ids[broker_order_key]
-        vqc_fill = BrokerAdapter.ToVQCFill(
-            update,
-            execution_id=VQCUtility.GetOrAddId(self.fill_ids, external_execution_id, "fill"),
-            order_id=vqc_order_id,
-        )
-        self.account = VQC.Update(self.account, vqc_fill)
+            vqc_order_id = self.order_ids[broker_order_key]
+            vqc_fill = BrokerAdapter.ToVQCFill(
+                update,
+                execution_id=max(self.fill_ids.values(), default=0) + 1,
+                order_id=vqc_order_id,
+            )
+            self.account = VQC.Update(self.account, vqc_fill)
+            print(f"[VQC][Validation] Applied fill for {vqc_fill.symbol} x {vqc_fill.quantity} at {vqc_fill.price}.")
+            self.fill_ids[external_execution_key] = vqc_fill.executionId
 
     async def OnTradeUpdate(self, update: Any) -> None:
         """Async callback suitable for TradingStream.subscribe_trade_updates."""
@@ -165,10 +178,11 @@ class VQCClient:
         )
 
         result = self.broker.submit_order(order_data=order)
-        vqc_order_id = self.NextOrderId()
-        self.order_ids[VQCUtility.GetOrderKey(result)] = vqc_order_id
-        vqc_order = VQC.Order(vqc_order_id, symbol, int(quantity), side, "market", "new", 0)
-        self.account = VQC.PlaceOrder(self.account, vqc_order)
+        with self.state_lock:
+            vqc_order_id = VQCUtility.NextOrderId(self.account.orders)
+            vqc_order = VQC.Order(vqc_order_id, symbol, int(quantity), side, "market", "new", 0)
+            self.account = VQC.PlaceOrder(self.account, vqc_order)
+            self.order_ids[VQCUtility.GetOrderKey(result)] = vqc_order_id
         print(f"[VQC][Validation] Submitted {side} order for {symbol} x {quantity}.")
         result_status = BrokerAdapter.ToVQCStatus(VQCUtility.GetField(result, "status", "new"))
         if result_status not in {"new", "partially_filled", "filled"}:
@@ -184,11 +198,3 @@ class VQCClient:
 
     def __repr__(self) -> str:
         return f"VQCClient(account_cash={self.account.cash})"
-
-
-if __name__ == "__main__":
-    client = VQCClient()
-    try:
-        client.Buy("GLD", 1)
-    except RuntimeError as error:
-        print(f"[VQC][Client] No order submitted: {error}")

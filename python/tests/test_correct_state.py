@@ -25,6 +25,20 @@ class DafnyStateTests(unittest.TestCase):
         self.assertEqual(account.positions[0].quantity, 2)
         self.assertEqual(len(account.ledger), 3)
 
+    def test_status_update_keeps_orders_as_a_dafny_sequence(self):
+        account = VQC.PlaceOrder(
+            VQC.NewAccount(),
+            VQC.Order(1, "GLD", 1, "buy", "market", "new", 0),
+        )
+        account = VQC.SetOrderStatus(account, 1, "accepted")
+        account = VQC.PlaceOrder(
+            account,
+            VQC.Order(2, "SLV", 1, "buy", "market", "new", 0),
+        )
+
+        self.assertEqual(len(account.orders), 2)
+        self.assertTrue(VQC.IsValidAccount(account))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

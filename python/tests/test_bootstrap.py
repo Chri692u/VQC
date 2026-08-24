@@ -70,6 +70,25 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(len(client.account.ledger), 2)
         self.assertTrue(VQC.IsValidAccount(client.account))
 
+    def test_client_refreshes_when_a_broker_event_is_untracked(self):
+        client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
+        update = SimpleNamespace(
+            event="new",
+            order=SimpleNamespace(
+                id="untracked-broker-order",
+                symbol="SLV",
+                side="buy",
+                qty="1",
+                filled_qty="0",
+                status="new",
+            ),
+        )
+
+        client.HandleTradeUpdate(update)
+
+        self.assertEqual(len(client.account.orders), 1)
+        self.assertTrue(VQC.IsValidAccount(client.account))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
