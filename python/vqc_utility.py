@@ -22,13 +22,6 @@ class VQCUtility:
         return str(order_id)
 
     @staticmethod
-    def GetOrder(orders: Any, order_id: int) -> Any:
-        for order in orders:
-            if order.orderId == order_id:
-                return order
-        raise ValueError(f"VQC order not found: {order_id}")
-
-    @staticmethod
     def NextOrderId(orders: Any) -> int:
         if not orders:
             return 1

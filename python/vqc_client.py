@@ -36,7 +36,6 @@ class VQCClient:
     def __post_init__(self) -> None:
         if self.broker is None:
             self.broker = self.MakeBroker()
-        self.account = VQC.NewAccount()
         self.SyncAccountFromBroker()
         if self.start_trade_stream and self.api_key and self.secret_key:
             self.StartTradeStream()
@@ -56,17 +55,24 @@ class VQCClient:
         )
 
     def SyncAccountFromBroker(self) -> None:
+        """Create one trusted VQC opening snapshot from current broker state."""
         account_info = self.broker.get_account()
         cash = Decimal(str(account_info.cash))
-        self.account = VQC.Deposit(self.account, VQC.Money.FromDecimal(cash), 1, 0)
-
-        open_orders = self.broker.get_orders(
+        broker_positions = self.broker.get_all_positions()
+        positions = [BrokerAdapter.ToVQCPosition(position) for position in broker_positions]
+        broker_orders = self.broker.get_orders(
             filter=GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=500)
         )
-        for order_id, broker_order in enumerate(open_orders, start=1):
-            vqc_order = BrokerAdapter.ToVQCOrder(broker_order, order_id)
-            self.account = VQC.PlaceOrder(self.account, vqc_order)
-            self.order_ids[VQCUtility.GetOrderKey(broker_order)] = order_id
+        orders = [
+            BrokerAdapter.ToVQCOrder(broker_order, order_id)
+            for order_id, broker_order in enumerate(broker_orders, start=1)
+        ]
+        self.account = VQC.Bootstrap(VQC.Money.FromDecimal(cash), positions, orders)
+        self.order_ids = {
+            VQCUtility.GetOrderKey(broker_order): order_id
+            for order_id, broker_order in enumerate(broker_orders, start=1)
+        }
+        print("[VQC][Client] Bootstrapped account from broker state.")
 
     def NextOrderId(self) -> int:
         return VQCUtility.NextOrderId(self.account.orders)
@@ -102,16 +108,15 @@ class VQCClient:
         if external_execution_id is None:
             raise ValueError("fill update is missing its execution ID")
         if str(external_execution_id) in self.fill_ids:
-            return  # Trade streams can redeliver an already-applied execution.
+            return
 
         vqc_order_id = self.order_ids[broker_order_key]
-        vqc_order = VQCUtility.GetOrder(self.account.orders, vqc_order_id)
         vqc_fill = BrokerAdapter.ToVQCFill(
             update,
             execution_id=VQCUtility.GetOrAddId(self.fill_ids, external_execution_id, "fill"),
             order_id=vqc_order_id,
         )
-        self.account = VQC.Update(self.account, vqc_order, vqc_fill)
+        self.account = VQC.Update(self.account, vqc_fill)
 
     async def OnTradeUpdate(self, update: Any) -> None:
         """Async callback suitable for TradingStream.subscribe_trade_updates."""

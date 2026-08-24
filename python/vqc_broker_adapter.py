@@ -45,9 +45,12 @@ class BrokerAdapter:
 
     @staticmethod
     def ToVQCPosition(position: Any) -> Any:
+        quantity = int(float(position.qty))
+        if quantity < 0:
+            raise ValueError("VQC currently supports long-only broker positions")
         return VQC.Position(
             position.symbol,
-            int(float(position.qty)),
+            quantity,
             BrokerAdapter.ToVQCMoney(position.avg_entry_price or 0),
         )
 

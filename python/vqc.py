@@ -37,6 +37,7 @@ from _dafny import HaltException
 from bindings import (
     Account,
     ApplyFill,
+    Bootstrap,
     Cancel,
     Cost,
     Deposit,
@@ -75,6 +76,7 @@ class VQC:
     FillRecord = FillRecord
     PositionRecord = PositionRecord
     NewAccount = NewAccount
+    Bootstrap = Bootstrap
     Deposit = Deposit
     Withdraw = Withdraw
     PlaceOrder = PlaceOrder
@@ -109,6 +111,7 @@ __all__ = [
     "HaltException",
     "VQC",
     "NewAccount",
+    "Bootstrap",
     "Deposit",
     "Withdraw",
     "PlaceOrder",
