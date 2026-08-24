@@ -20,6 +20,16 @@ module Validation {
     }
 
     // Identifier checks.
+    predicate IsValidOrderId(id: OrderId)
+    {
+        id.value > 0
+    }
+
+    predicate IsValidExecutionId(id: ExecutionId)
+    {
+        id.value > 0
+    }
+
     predicate IsValidLedgerId(id: LedgerId)
     {
         id.value > 0
@@ -32,23 +42,6 @@ module Validation {
     }
 
     // Order checks.
-    predicate IsOpenStatus(status: OrderStatus)
-    {
-        status == New || status == Accepted || status == PartiallyFilled
-    }
-
-    predicate IsMarketOrder(order: Order)
-    {
-        order.orderType == Market
-    }
-
-    predicate IsLimitOrder(order: Order)
-    {
-        match order.orderType
-            case Market => false
-            case Limit(_) => true
-    }
-
     predicate HasPositiveQuantity(order: Order)
     {
         order.quantity > 0
@@ -56,7 +49,7 @@ module Validation {
 
     predicate HasBoundedFilledQuantity(order: Order)
     {
-        0 <= order.filledQuantity <= order.quantity
+        order.filledQuantity <= order.quantity
     }
 
     predicate HasValidOrderSymbol(order: Order)
@@ -71,15 +64,22 @@ module Validation {
             case Limit(limitPrice) => IsPositive(limitPrice)
     }
 
+    // Status compatibility is a lifecycle rule. It is intentionally separate
+    // from IsValidOrder, which describes a structurally well-formed snapshot.
+    predicate IsOrderStatusCompatible(status: OrderStatus, filledQuantity: nat, quantity: nat)
+    {
+        match status
+            case New => filledQuantity == 0
+            case Accepted => filledQuantity == 0
+            case PartiallyFilled => 0 < filledQuantity < quantity
+            case Filled => filledQuantity == quantity
+            case Cancelled => filledQuantity < quantity
+            case Rejected => filledQuantity == 0
+    }
+
     predicate HasValidOrderStatus(order: Order)
     {
-        match order.status
-            case New => IsUnfilled(order)
-            case Accepted => IsUnfilled(order)
-            case PartiallyFilled => 0 < order.filledQuantity < order.quantity
-            case Filled => IsFullyFilled(order)
-            case Cancelled => order.filledQuantity < order.quantity
-            case Rejected => IsUnfilled(order)
+        IsOrderStatusCompatible(order.status, order.filledQuantity, order.quantity)
     }
 
     predicate HasRemainingQuantity(order: Order)
@@ -120,13 +120,44 @@ module Validation {
                 toStatus == Rejected)
     }
 
+    // Lifecycle transition predicates. These group the semantic conditions
+    // required by order operations without making them global validity rules.
+    predicate CanSetOrderStatus(order: Order, newStatus: OrderStatus)
+    {
+        IsValidOrder(order) &&
+        CanTransition(order.status, newStatus) &&
+        IsOrderStatusCompatible(newStatus, order.filledQuantity, order.quantity)
+    }
+
+    predicate CanApplyFill(order: Order, fillQuantity: nat)
+    {
+        IsValidOrder(order) &&
+        CanAcceptFill(order.status) &&
+        fillQuantity > 0 &&
+        fillQuantity <= order.quantity - order.filledQuantity
+    }
+
+    predicate CanCancelOrder(order: Order)
+    {
+        IsValidOrder(order) &&
+        (order.status == New || order.status == Accepted || order.status == PartiallyFilled) &&
+        HasRemainingQuantity(order)
+    }
+
+    predicate CanRejectOrder(order: Order)
+    {
+        IsValidOrder(order) &&
+        (order.status == New || order.status == Accepted) &&
+        IsUnfilled(order)
+    }
+
     predicate IsValidOrder(order: Order)
     {
+        IsValidOrderId(order.orderId) &&
         HasPositiveQuantity(order) &&
         HasBoundedFilledQuantity(order) &&
         HasValidOrderSymbol(order) &&
-        HasValidOrderType(order) &&
-        HasValidOrderStatus(order)
+        HasValidOrderType(order)
     }
 
     predicate IsValidOrderSet(orders: seq<Order>)
@@ -138,7 +169,7 @@ module Validation {
     // Execution checks.
     predicate HasValidExecutionId(fill: Fill)
     {
-        fill.executionId.value > 0
+        IsValidExecutionId(fill.executionId)
     }
 
     predicate HasValidFillQuantity(fill: Fill)
@@ -160,8 +191,6 @@ module Validation {
     }
 
     // Position checks.
-
-
     // Returns true when the position has open quantity.
     predicate IsOpen(position: Position)
     {
@@ -181,8 +210,8 @@ module Validation {
 
     predicate HasValidPositionAveragePrice(position: Position)
     {
-        (position.quantity == 0 && IsZero(position.averagePrice)) ||
-        (position.quantity > 0 && IsPositive(position.averagePrice))
+        (IsClosed(position) && IsZero(position.averagePrice)) ||
+        (IsOpen(position) && IsPositive(position.averagePrice))
     }
 
     predicate IsValidPosition(position: Position)
@@ -197,20 +226,29 @@ module Validation {
         (forall i, j :: 0 <= i < j < |positions| ==> positions[i].symbol != positions[j].symbol)
     }
 
-    // Ledger checks.
-    predicate HasLedgerEntryId(entry: LedgerEntry, id: LedgerId)
+    // Position transition predicates.
+    predicate CanApplyBuy(position: Position, fill: Fill)
     {
-        EntryId(entry) == id
+        IsValidPosition(position) &&
+        IsValidFill(fill) &&
+        position.symbol == fill.symbol
     }
 
+    predicate CanApplySell(position: Position, fill: Fill)
+    {
+        CanApplyBuy(position, fill) &&
+        position.quantity >= fill.quantity
+    }
+
+    // Ledger checks.
     predicate ContainsLedgerId(entries: seq<LedgerEntry>, id: LedgerId)
     {
-        exists i :: 0 <= i < |entries| && HasLedgerEntryId(entries[i], id)
+        exists i :: 0 <= i < |entries| && EntryId(entries[i]) == id
     }
 
     predicate AllUniqueLedgerIds(entries: seq<LedgerEntry>)
     {
-        forall i, j :: 0 <= i < j < |entries| ==> !HasLedgerEntryId(entries[i], EntryId(entries[j]))
+        forall i, j :: 0 <= i < j < |entries| ==> EntryId(entries[i]) != EntryId(entries[j])
     }
 
     predicate IsValidEntry(entry: LedgerEntry)
@@ -228,6 +266,14 @@ module Validation {
     {
         (forall i :: 0 <= i < |ledger.entries| ==> IsValidEntry(ledger.entries[i])) &&
         AllUniqueLedgerIds(ledger.entries)
+    }
+
+    // Ledger transition predicate.
+    predicate CanAppendLedgerEntry(ledger: Ledger, entry: LedgerEntry)
+    {
+        IsValidLedger(ledger) &&
+        IsValidEntry(entry) &&
+        !ContainsLedgerId(ledger.entries, EntryId(entry))
     }
 
     // Account checks.

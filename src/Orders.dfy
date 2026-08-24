@@ -5,7 +5,6 @@ include "Currency.dfy"
 module Orders {
     import opened Types
     import opened Validation
-    import opened Currency
 
     // Returns the remaining unfilled quantity for an order.
     function RemainingQuantity(order: Order): nat
@@ -16,8 +15,9 @@ module Orders {
 
     // Returns the order after applying a status transition.
     function SetStatus(order: Order, newStatus: OrderStatus): Order
-        requires IsValidOrder(order)
-        requires CanTransition(order.status, newStatus)
+        requires CanSetOrderStatus(order, newStatus)
+        ensures IsValidOrder(SetStatus(order, newStatus))
+        ensures HasValidOrderStatus(SetStatus(order, newStatus))
     {
         Order(
             order.orderId,
@@ -32,10 +32,9 @@ module Orders {
 
     // Returns the order after accepting a fill amount.
     function ApplyFill(order: Order, fillQuantity: nat): Order
-        requires IsValidOrder(order)
-        requires CanAcceptFill(order.status)
-        requires fillQuantity > 0
-        requires fillQuantity <= RemainingQuantity(order)
+        requires CanApplyFill(order, fillQuantity)
+        ensures IsValidOrder(ApplyFill(order, fillQuantity))
+        ensures HasValidOrderStatus(ApplyFill(order, fillQuantity))
     {
         Order(
             order.orderId,
@@ -50,8 +49,9 @@ module Orders {
 
     // Returns the order in a cancelled state.
     function Cancel(order: Order): Order
-        requires IsValidOrder(order)
-        requires order.status == New || order.status == Accepted || order.status == PartiallyFilled
+        requires CanCancelOrder(order)
+        ensures IsValidOrder(Cancel(order))
+        ensures HasValidOrderStatus(Cancel(order))
     {
         Order(
             order.orderId,
@@ -66,8 +66,9 @@ module Orders {
 
     // Returns the order in a rejected state.
     function Reject(order: Order): Order
-        requires IsValidOrder(order)
-        requires order.status == New || order.status == Accepted
+        requires CanRejectOrder(order)
+        ensures IsValidOrder(Reject(order))
+        ensures HasValidOrderStatus(Reject(order))
     {
         Order(
             order.orderId,

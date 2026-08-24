@@ -7,13 +7,11 @@ module LedgerOps {
     import opened Types
     import opened Validation
     import opened Currency
-    import opened Execution
 
     // Appends a new entry to the ledger, preserving uniqueness of ledger ids.
     function Append(ledger: Ledger, entry: LedgerEntry): Ledger
-        requires IsValidLedger(ledger)
-        requires IsValidEntry(entry)
-        requires !ContainsLedgerId(ledger.entries, EntryId(entry))
+        requires CanAppendLedgerEntry(ledger, entry)
+        ensures IsValidLedger(Append(ledger, entry))
     {
         Ledger(ledger.entries + [entry])
     }

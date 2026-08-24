@@ -39,7 +39,6 @@ module Execution {
 
     // Returns the total executed quantity for a specific order.
     function TotalExecutedQuantityForOrder(fills: seq<Fill>, order: Order): nat
-        requires IsValidOrder(order)
         decreases |fills|
     {
         if |fills| == 0 then
@@ -56,4 +55,15 @@ module Execution {
         fill.orderId == order.orderId &&
         fill.symbol == order.symbol
     }
+
+    // Returns true when a fill can be applied to this current order snapshot.
+    // The order, rather than the fill, is the authoritative source of side and
+    // lifecycle state.
+    predicate IsApplicableFill(order: Order, fill: Fill)
+    {
+        IsValidFill(fill) &&
+        BelongsToOrder(fill, order) &&
+        CanApplyFill(order, fill.quantity)
+    }
+
 }

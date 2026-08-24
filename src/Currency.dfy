@@ -3,7 +3,6 @@ include "Validation.dfy"
 
 module Currency {
     import opened Types
-    import opened Validation
 
     // Adds two money values.
     function Add(a: Money, b: Money): Money

@@ -23,10 +23,11 @@ module Types {
         filledQuantity: nat
     )
 
-    // Execution and fill representation.
+    // Execution and fill representation. The order supplies the economic side
+    // (buy or sell); a fill records the priced quantity executed against it.
     datatype Fill = Fill(
         executionId: ExecutionId,
-        orderId: OrderId,
+        orderId: OrderId, // References the authoritative order.
         symbol: string,
         quantity: nat,
         price: Money,

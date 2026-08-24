@@ -7,7 +7,6 @@ module Positions {
     import opened Types
     import opened Validation
     import opened Currency
-    import opened Execution
 
     // Returns the current value of a position.
     function PositionValue(position: Position): Money
@@ -18,9 +17,8 @@ module Positions {
 
     // Returns a position after applying a buy fill.
     function ApplyBuy(position: Position, fill: Fill): Position
-        requires IsValidPosition(position)
-        requires IsValidFill(fill)
-        requires position.symbol == fill.symbol
+        requires CanApplyBuy(position, fill)
+        ensures IsValidPosition(ApplyBuy(position, fill))
     {
         Position(
             position.symbol,
@@ -37,10 +35,8 @@ module Positions {
 
     // Returns a position after applying a sell fill.
     function ApplySell(position: Position, fill: Fill): Position
-        requires IsValidPosition(position)
-        requires IsValidFill(fill)
-        requires position.symbol == fill.symbol
-        requires position.quantity >= fill.quantity
+        requires CanApplySell(position, fill)
+        ensures IsValidPosition(ApplySell(position, fill))
     {
         Position(
             position.symbol,
