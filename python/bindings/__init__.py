@@ -3,17 +3,22 @@
 from .vqc_account import Deposit, NewAccount, PlaceOrder, Update, Withdraw
 from .vqc_currency import Cost, Money, Sum
 from .vqc_types import (
+    Account,
     ApplyFill,
     Cancel,
     ExecutionValue,
     Fill,
+    FillRecord,
     IsValidAccount,
     IsValidFill,
     IsValidLedger,
     IsValidOrder,
     IsValidPosition,
+    Ledger,
     Order,
+    OrderRecord,
     Position,
+    PositionRecord,
     Reject,
     RemainingQuantity,
     SetOrderStatus,
@@ -23,6 +28,11 @@ from .vqc_types import (
 
 __all__ = [
     "Money",
+    "Account",
+    "Ledger",
+    "OrderRecord",
+    "FillRecord",
+    "PositionRecord",
     "NewAccount",
     "Deposit",
     "Withdraw",

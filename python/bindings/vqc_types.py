@@ -8,10 +8,6 @@ from typing import Any
 import subprocess
 import sys
 
-# ---------------------------------------------------------------------------
-# Generated runtime setup
-# ---------------------------------------------------------------------------
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CODE_PY = REPO_ROOT / "compiled" / "py" / "Account-py"
 ACTUAL_CODE_PY = REPO_ROOT / "compiled" / "py" / "Account-py-py"
@@ -40,16 +36,16 @@ import Types as TypesModule
 import Execution as ExecutionModule
 import Validation as ValidationModule
 
-# Dafny emits each module's declarations under its ``default__`` class.
 Orders = OrdersModule.default__
 Types = TypesModule
 Execution = ExecutionModule.default__
 Validation = ValidationModule.default__
 
-# ---------------------------------------------------------------------------
-# Order and execution records
-# ---------------------------------------------------------------------------
-
+Account = Types.Account_Account
+Ledger = Types.Ledger_Ledger
+OrderRecord = Types.Order_Order
+FillRecord = Types.Fill_Fill
+PositionRecord = Types.Position_Position
 
 def Order(
     order_id: int,
@@ -60,7 +56,7 @@ def Order(
     status: str = "new",
     filled_quantity: int = 0,
     limit_price: int | None = None,
-) -> Any:
+) -> OrderRecord:
     if side == "buy":
         side_enum = Types.OrderSide_Buy()
     elif side == "sell":
@@ -92,7 +88,7 @@ def Order(
     else:
         raise ValueError(f"unsupported status: {status}")
 
-    return Types.Order_Order(
+    return OrderRecord(
         order_id,
         symbol,
         quantity,
@@ -103,17 +99,12 @@ def Order(
     )
 
 
-def Fill(execution_id: int, order_id: int, symbol: str, quantity: int, price: Money, timestamp: int) -> Any:
-    return Types.Fill_Fill(execution_id, order_id, symbol, quantity, price, timestamp)
+def Fill(execution_id: int, order_id: int, symbol: str, quantity: int, price: Money, timestamp: int) -> FillRecord:
+    return FillRecord(execution_id, order_id, symbol, quantity, price, timestamp)
 
 
-def Position(symbol: str, quantity: int, average_price: Money) -> Any:
-    return Types.Position_Position(symbol, quantity, average_price)
-
-
-# ---------------------------------------------------------------------------
-# Order state operations
-# ---------------------------------------------------------------------------
+def Position(symbol: str, quantity: int, average_price: Money) -> PositionRecord:
+    return PositionRecord(symbol, quantity, average_price)
 
 
 def StatusEnum(status: str) -> Any:

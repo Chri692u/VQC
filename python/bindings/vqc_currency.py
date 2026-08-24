@@ -8,10 +8,6 @@ from typing import Any
 import subprocess
 import sys
 
-# ---------------------------------------------------------------------------
-# Generated runtime setup
-# ---------------------------------------------------------------------------
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CODE_PY = REPO_ROOT / "compiled" / "py" / "Account-py"
 ACTUAL_CODE_PY = REPO_ROOT / "compiled" / "py" / "Account-py-py"
@@ -33,11 +29,6 @@ CODE_PY = ACTUAL_CODE_PY
 
 if str(CODE_PY) not in sys.path:
     sys.path.insert(0, str(CODE_PY))
-
-# ---------------------------------------------------------------------------
-# Money / currency
-# ---------------------------------------------------------------------------
-
 
 from _dafny import HaltException
 import Currency as CurrencyModule
