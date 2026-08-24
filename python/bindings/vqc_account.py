@@ -43,8 +43,6 @@ AccountOps = AccountOpsModule.default__
 # ---------------------------------------------------------------------------
 # Account lifecycle
 # ---------------------------------------------------------------------------
-
-
 def NewAccount() -> Any:
     return AccountOps.NewAccount()
 

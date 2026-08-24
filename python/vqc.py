@@ -40,9 +40,32 @@ if str(ACCOUNT_PY) not in sys.path:
     sys.path.insert(0, str(ACCOUNT_PY))
 
 from _dafny import HaltException
-from bindings.vqc_currency import Money, Cost, Sum
-from bindings.vqc_types import *
-from bindings.vqc_account import *
+from bindings import (
+    ApplyFill,
+    Cancel,
+    Cost,
+    Deposit,
+    ExecutionValue,
+    Fill,
+    IsValidAccount,
+    IsValidFill,
+    IsValidLedger,
+    IsValidOrder,
+    IsValidPosition,
+    Money,
+    NewAccount,
+    Order,
+    PlaceOrder,
+    Position,
+    Reject,
+    RemainingQuantity,
+    SetOrderStatus,
+    SetStatus,
+    Sum,
+    Types,
+    Update,
+    Withdraw,
+)
 
 # ---------------------------------------------------------------------------
 # Public facade
