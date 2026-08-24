@@ -18,7 +18,7 @@ def EnsureDafnyCore() -> Path:
             [
                 "dafny",
                 "build",
-                "src/Account.dfy",
+                "dafny/Account.dfy",
                 "--target:py",
                 "--output:" + str(OUTPUT_PATH),
             ],

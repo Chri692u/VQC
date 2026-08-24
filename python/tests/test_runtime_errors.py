@@ -12,7 +12,7 @@ class DafnyRuntimeNegativeTests(unittest.TestCase):
             report = ReportException(error)
 
         self.assertIn("Dafny runtime error", report)
-        self.assertIn("src/Account.dfy", report)
+        self.assertIn("dafny/Account.dfy", report)
         self.assertIn("expectation violation", report)
 
     def test_duplicate_deposit_id_raises_dafny_runtime_error(self):
