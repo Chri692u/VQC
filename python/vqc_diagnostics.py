@@ -48,4 +48,29 @@ def DisplayAccount(account: Any) -> str:
     )
 
 
-__all__ = ["ReportException", "DisplayAccount"]
+def DisplayLedger(ledger: Any) -> str:
+    """Format a generated Dafny ledger sequence as concise readable entries."""
+    lines = ["VQC Ledger"]
+    for entry in ledger:
+        entry_id = getattr(entry, "id_", "unknown")
+        if getattr(entry, "is_Opening", False):
+            lines.append(
+                f"  #{entry_id} Opening: cash={entry.cash}, "
+                f"positions={len(entry.positions)}, orders={len(entry.orders)}"
+            )
+        elif getattr(entry, "is_Deposit", False):
+            lines.append(f"  #{entry_id} Deposit: amount={entry.amount}")
+        elif getattr(entry, "is_Withdrawal", False):
+            lines.append(f"  #{entry_id} Withdrawal: amount={entry.amount}")
+        elif getattr(entry, "is_Trade", False):
+            fill = entry.fill
+            lines.append(
+                f"  #{entry_id} Trade: order={fill.orderId}, {fill.symbol} x{fill.quantity} "
+                f"@ {fill.price}"
+            )
+        else:
+            lines.append(f"  #{entry_id} Unknown entry")
+    return "\n".join(lines)
+
+
+__all__ = ["ReportException", "DisplayAccount", "DisplayLedger"]
