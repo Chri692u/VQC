@@ -41,7 +41,7 @@ class DafnyRuntimeNegativeTests(unittest.TestCase):
         invalid_fill = VQC.Fill(1, 1, "GLD", 2, 100, 0)
 
         with self.assertRaises(HaltException):
-            VQC.Update(account, order, invalid_fill)
+            VQC.Update(account, invalid_fill)
 
 
 if __name__ == "__main__":

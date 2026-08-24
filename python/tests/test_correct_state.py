@@ -16,7 +16,7 @@ class DafnyStateTests(unittest.TestCase):
         self.assertEqual(len(account.orders), 1)
 
         fill = VQC.Fill(1, 1, "GLD", 2, 100, 0)
-        account = VQC.Update(account, order, fill)
+        account = VQC.Update(account, fill)
 
         self.assertEqual(account.cash, 700)
         self.assertEqual(account.orders[0].filledQuantity, 2)
