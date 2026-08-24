@@ -44,7 +44,7 @@ Use `Update` only for broker `partial_fill` and `fill` events. A fill never
 creates an order. Use `SetOrderStatus` only for events such as acceptance,
 cancellation, or rejection.
 
-## Validation and order helper
+## Validation and order utility
 
 | Call | Result |
 | --- | --- |
