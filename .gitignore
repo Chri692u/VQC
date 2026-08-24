@@ -2,3 +2,4 @@
 /python/.venv
 /compiled/*
 /python/__pycache__
+/python/bindings/__pycache__

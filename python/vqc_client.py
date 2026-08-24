@@ -64,7 +64,14 @@ class VQCClient:
         return max(order.orderId for order in self.account.orders) + 1
 
     def MarketIsOpen(self) -> bool:
-        return bool(self.broker.get_clock().is_open)
+        clock = self.broker.get_clock()
+        print(
+            f"Alpaca clock: timestamp={clock.timestamp}, "
+            f"is_open={clock.is_open}, "
+            f"next_open={clock.next_open}, "
+            f"next_close={clock.next_close}"
+        )
+        return clock.is_open
 
     def SubmitOrder(self, symbol: str, quantity: float, side: str) -> Any:
         if not self.MarketIsOpen():
