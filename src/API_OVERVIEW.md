@@ -1,13 +1,12 @@
 # Dafny API
 
 These Dafny functions and methods are the implementation surface consumed by
-the bindings in other languages. Internal functions, utilities, contract
+the Python and TypeScript bindings. Internal functions, utilities, contract
 predicates, and proof lemmas are not to be used by external interfaces.
 
 `Types.Money(value: int)` is the money value used by `Currency` and all account
-operations. It stores signed integer minor units; for example, the Python `VQC.Money` binding
-uses a scale of 100, so `VQC.Money.FromDecimal("12.34")` becomes `Money(1234)`
-in Dafny.
+operations. It stores signed integer minor units; both `VQC.Money` bindings use
+a scale of 100, so `Money.FromDecimal("12.34")` becomes `Money(1234)` in Dafny.
 
 | Dafny module | Function or method | External use |
 | --- | --- | --- |
@@ -29,7 +28,7 @@ Internal preservation proofs are split by domain: `LedgerProof` proves fresh
 generated ledger IDs, `OrderProof` proves valid order replacement, and
 `PositionProof` proves valid position upsert/removal. `AccountProof` contains
 the composed account-operation contract predicates; none of these modules is
-part of the Python API.
+part of the Python or TypeScript API.
 
 The `AccountOps` methods preserve `IsValidAccount` when their preconditions are
 met. Account position sets contain only active, positive-quantity holdings;

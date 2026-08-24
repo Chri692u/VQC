@@ -12,6 +12,10 @@ The runtime implementation uses Python and Alpaca. All account calls return a ne
 Invalid Dafny preconditions raise `VQC.HaltException` at runtime. The internal
 Dafny proof refactor does not change this Python API.
 
+The generated Dafny Python modules live in `python/compiled/VQC-py/`.
+`bindings.vqc_dafny_core` builds them when absent and loads them for every
+binding; application code should import only `vqc` or the public bindings.
+
 ## Money
 
 | Call | Result |
