@@ -34,10 +34,10 @@ account = VQC.Update(account, fill)
 - `VQC.SetOrderStatus` is for non-fill lifecycle events such as acceptance,
   cancellation, and rejection. Use `Update` for every fill.
 
-## Helpers
+## Utility
 
 `VQC.Sum`, `VQC.Cost`, and `VQC.RemainingQuantity` provide small money/order
-helpers. `VQC.IsValidOrder`, `VQC.IsValidFill`, `VQC.IsValidPosition`,
+utility functions. `VQC.IsValidOrder`, `VQC.IsValidFill`, `VQC.IsValidPosition`,
 `VQC.IsValidLedger`, and `VQC.IsValidAccount` expose validation predicates.
 
 ## Example
