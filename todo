@@ -1,0 +1,3 @@
+1. clean up python code where possible
+2. clean up dafny, especially in Ledger and Account
+3. python docs strings and generated docs
