@@ -30,7 +30,7 @@ CODE_PY = ACTUAL_CODE_PY
 if str(CODE_PY) not in sys.path:
     sys.path.insert(0, str(CODE_PY))
 
-from _dafny import HaltException, Seq
+from _dafny import HaltException
 import Orders as OrdersModule
 import Types as TypesModule
 import Validation as ValidationModule
@@ -122,29 +122,6 @@ def StatusEnum(status: str) -> Any:
 
 
 RemainingQuantity = Orders.RemainingQuantity
-
-
-def _SetStatus(order: Any, new_status: str) -> Any:
-    return Orders.SetStatus(order, StatusEnum(new_status))
-
-
-def SetOrderStatus(account: Any, order_id: int, new_status: str) -> Any:
-    updated_orders = []
-    found = False
-    for order in account.orders:
-        if order.orderId == order_id:
-            updated_orders.append(_SetStatus(order, new_status))
-            found = True
-        else:
-            updated_orders.append(order)
-    if not found:
-        raise ValueError(f"order not found: {order_id}")
-    return Types.Account_Account(
-        account.cash,
-        account.ledger,
-        account.positions,
-        Seq(updated_orders),
-    )
 
 
 IsValidOrder = Validation.IsValidOrder

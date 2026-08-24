@@ -43,6 +43,16 @@ class DafnyRuntimeNegativeTests(unittest.TestCase):
         with self.assertRaises(HaltException):
             VQC.Update(account, invalid_fill)
 
+    def test_invalid_order_status_transition_raises_dafny_runtime_error(self):
+        account = VQC.PlaceOrder(
+            VQC.NewAccount(),
+            VQC.Order(1, "GLD", 1, "buy", "market", "new", 0),
+        )
+        account = VQC.SetOrderStatus(account, 1, "accepted")
+
+        with self.assertRaises(HaltException):
+            VQC.SetOrderStatus(account, 1, "new")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

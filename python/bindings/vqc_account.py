@@ -34,7 +34,7 @@ from _dafny import HaltException
 from _dafny import Seq
 import AccountOps as AccountOpsModule
 from bindings.vqc_currency import Money
-from bindings.vqc_types import Account, FillRecord, OrderRecord, PositionRecord
+from bindings.vqc_types import Account, FillRecord, OrderRecord, PositionRecord, StatusEnum
 
 AccountOps = AccountOpsModule.default__
 
@@ -62,6 +62,10 @@ def Withdraw(account: Account, amount: Money, ledger_id: int = 1, timestamp: int
 
 def PlaceOrder(account: Account, order: OrderRecord) -> Account:
     return AccountOps.PlaceOrder(account, order)
+
+
+def SetOrderStatus(account: Account, order_id: int, new_status: str) -> Account:
+    return AccountOps.SetOrderStatus(account, order_id, StatusEnum(new_status))
 
 
 def Update(account: Account, fill: FillRecord) -> Account:
