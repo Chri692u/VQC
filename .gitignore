@@ -1,3 +1,4 @@
 /python/KEYS.env
 /python/.venv
 /compiled/*
+/python/__pycache__

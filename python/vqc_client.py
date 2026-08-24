@@ -79,7 +79,7 @@ class VQCClient:
 
         vqc_order = VQC.Order(self.NextOrderId(), symbol, int(quantity), side, "market", "new", 0)
         next_account = VQC.PlaceOrder(self.account, vqc_order)
-        accepted_account = VQC.SetOrderStatus(next_account, vqc_order.orderId, "accepted")
+        accepted_account = VQC.SetOrderStatus(next_account, vqc_order.orderId, "accepted") # ?? 
 
         result = self.broker.submit_order(order_data=order)
         self.account = accepted_account
