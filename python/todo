@@ -1,8 +1,0 @@
-Python API:
-1. More (good) structure on bindings (maybe bindings can be a folder with multiple files and vqc.py combine them)
-2. Improve diagnostics
-3. Runtime error handling in client
-4. Write a few algorithms and narrow down API
-
-Tests:
-1. expand current and ok
