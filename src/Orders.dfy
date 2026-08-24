@@ -18,6 +18,7 @@ module Orders {
         requires CanSetOrderStatus(order, newStatus)
         ensures IsValidOrder(SetStatus(order, newStatus))
         ensures HasValidOrderStatus(SetStatus(order, newStatus))
+        ensures SetStatus(order, newStatus).orderId == order.orderId
     {
         Order(
             order.orderId,

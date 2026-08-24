@@ -171,6 +171,15 @@ module Validation {
         forall i :: 0 <= i < |orders| ==> HasValidOrderStatus(orders[i])
     }
 
+    // Sequence-editing predicates keep the collection helpers' contracts
+    // aligned with the domain validity rules.
+    predicate CanUpdateOrder(orders: seq<Order>, updated: Order)
+    {
+        IsValidOrderSet(orders) &&
+        IsValidOrder(updated) &&
+        exists i :: 0 <= i < |orders| && orders[i].orderId == updated.orderId
+    }
+
     // Execution checks.
     predicate HasValidExecutionId(fill: Fill)
     {
@@ -227,8 +236,29 @@ module Validation {
 
     predicate IsValidPositionSet(positions: seq<Position>)
     {
-        (forall i :: 0 <= i < |positions| ==> IsValidPosition(positions[i])) &&
+        // Account position sets contain active holdings only.
+        (forall i :: 0 <= i < |positions| ==> IsValidPosition(positions[i]) && IsOpen(positions[i])) &&
         (forall i, j :: 0 <= i < j < |positions| ==> positions[i].symbol != positions[j].symbol)
+    }
+
+    predicate CanUpdatePosition(positions: seq<Position>, updated: Position)
+    {
+        IsValidPositionSet(positions) &&
+        IsValidPosition(updated) &&
+        exists i :: 0 <= i < |positions| && positions[i].symbol == updated.symbol
+    }
+
+    predicate CanUpsertPosition(positions: seq<Position>, updated: Position)
+    {
+        IsValidPositionSet(positions) &&
+        IsValidPosition(updated) &&
+        IsOpen(updated)
+    }
+
+    predicate CanRemovePosition(positions: seq<Position>, symbol: string)
+    {
+        IsValidPositionSet(positions) &&
+        exists i :: 0 <= i < |positions| && positions[i].symbol == symbol
     }
 
     // Position transition predicates.

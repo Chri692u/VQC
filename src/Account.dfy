@@ -7,6 +7,9 @@ include "Positions.dfy"
 include "Ledger.dfy"
 include "AccountUtility.dfy"
 include "AccountProof.dfy"
+include "LedgerProof.dfy"
+include "OrderProof.dfy"
+include "PositionProof.dfy"
 
 module AccountOps {
     import opened Types
@@ -18,6 +21,9 @@ module AccountOps {
     import opened LedgerOps
     import opened AccountUtility
     import opened AccountProof
+    import opened LedgerProof
+    import opened OrderProof
+    import opened PositionProof
 
     // Returns a new empty account.
     function NewAccount(): Account
@@ -36,6 +42,11 @@ module AccountOps {
     ): Account
         requires CanBootstrap(cash, positions, orders, id)
         ensures IsValidAccount(BootstrapCore(cash, positions, orders, id, timestamp))
+        ensures BootstrapCore(cash, positions, orders, id, timestamp).cash == cash
+        ensures BootstrapCore(cash, positions, orders, id, timestamp).positions == positions
+        ensures BootstrapCore(cash, positions, orders, id, timestamp).orders == orders
+        ensures BootstrapCore(cash, positions, orders, id, timestamp).ledger ==
+            Ledger([Opening(id, cash, positions, orders, timestamp)])
     {
         Account(cash, Ledger([Opening(id, cash, positions, orders, timestamp)]), positions, orders)
     }
@@ -83,6 +94,25 @@ module AccountOps {
         )
     }
 
+    // Updates the lifecycle status of an existing order without an execution.
+    function SetOrderStatusCore(
+        account: Account, orderId: OrderId, newStatus: OrderStatus
+    ): Account
+        requires CanSetAccountOrderStatus(account, orderId, newStatus)
+        ensures IsValidAccount(SetOrderStatusCore(account, orderId, newStatus))
+    {
+        var order := GetOrder(account.orders, orderId);
+        var updatedOrder := Orders.SetStatus(order, newStatus);
+        // Lemma invocation.
+        UpdateOrderPreservesValidity(account.orders, updatedOrder);
+        Account(
+            account.cash,
+            account.ledger,
+            account.positions,
+            UpdateOrder(account.orders, updatedOrder)
+        )
+    }
+
     // Updates an account with a fill against an existing order.
     function UpdateCore(account: Account, fill: Fill): Account
         requires CanUpdate(account, fill)
@@ -102,8 +132,12 @@ module AccountOps {
                 Positions.ApplySell(basePosition, fill);
 
         // Lemma invocation.
-        UpsertPositionPreservesValidity(account.positions, nextPosition);
-        var updatedPositions := UpsertPosition(account.positions, nextPosition);
+        ApplyPositionUpdatePreservesValidity(account.positions, nextPosition, order.side);
+        var updatedPositions :=
+            if order.side == Sell && IsClosed(nextPosition) then
+                RemovePosition(account.positions, nextPosition.symbol)
+            else
+                UpsertPosition(account.positions, nextPosition);
         var nextId := NextLedgerId(account.ledger);
         var tradeEntry := LedgerEntry.Trade(nextId, fill);
 
@@ -141,6 +175,10 @@ module AccountOps {
         timestamp: nat
     ) returns (result: Account)
         ensures IsValidAccount(result)
+        ensures result.cash == cash
+        ensures result.positions == positions
+        ensures result.orders == orders
+        ensures result.ledger == Ledger([Opening(id, cash, positions, orders, timestamp)])
     {
         expect CanBootstrap(cash, positions, orders, id);
         result := BootstrapCore(cash, positions, orders, id, timestamp);
@@ -158,6 +196,15 @@ module AccountOps {
     {
         expect CanPlaceOrder(account, order);
         result := PlaceOrderCore(account, order);
+    }
+
+    method SetOrderStatus(
+        account: Account, orderId: OrderId, newStatus: OrderStatus
+    ) returns (result: Account)
+        ensures IsValidAccount(result)
+    {
+        expect CanSetAccountOrderStatus(account, orderId, newStatus);
+        result := SetOrderStatusCore(account, orderId, newStatus);
     }
 
     method Update(account: Account, fill: Fill) returns (result: Account)

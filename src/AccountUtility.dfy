@@ -31,6 +31,7 @@ module AccountUtility {
     function GetOrder(orders: seq<Order>, target: OrderId): Order
         requires IsValidOrderSet(orders)
         requires ExistsOrder(orders, target)
+        ensures GetOrder(orders, target).orderId == target
         decreases |orders|
     {
         if |orders| == 0 then
@@ -42,9 +43,7 @@ module AccountUtility {
     }
 
     function UpdateOrder(orders: seq<Order>, updated: Order): seq<Order>
-        requires IsValidOrderSet(orders)
-        requires IsValidOrder(updated)
-        requires ExistsOrder(orders, updated.orderId)
+        requires CanUpdateOrder(orders, updated)
         decreases |orders|
     {
         if |orders| == 0 then
@@ -100,9 +99,7 @@ module AccountUtility {
     }
 
     function UpdatePosition(positions: seq<Position>, updated: Position): seq<Position>
-        requires IsValidPositionSet(positions)
-        requires IsValidPosition(updated)
-        requires ExistsPosition(positions, updated.symbol)
+        requires CanUpdatePosition(positions, updated)
         decreases |positions|
     {
         if |positions| == 0 then
@@ -115,8 +112,7 @@ module AccountUtility {
 
     // Replaces a position with the same symbol, or appends a new one.
     function UpsertPosition(positions: seq<Position>, updated: Position): seq<Position>
-        requires IsValidPositionSet(positions)
-        requires IsValidPosition(updated)
+        requires CanUpsertPosition(positions, updated)
         decreases |positions|
     {
         if |positions| == 0 then
@@ -125,6 +121,17 @@ module AccountUtility {
             [updated] + positions[1..]
         else
             [positions[0]] + UpsertPosition(positions[1..], updated)
+    }
+
+    // Removes the active position for a symbol after it has been fully sold.
+    function RemovePosition(positions: seq<Position>, symbol: string): seq<Position>
+        requires CanRemovePosition(positions, symbol)
+        decreases |positions|
+    {
+        if positions[0].symbol == symbol then
+            positions[1..]
+        else
+            [positions[0]] + RemovePosition(positions[1..], symbol)
     }
 
 }

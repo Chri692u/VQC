@@ -19,6 +19,7 @@ module Positions {
     function ApplyBuy(position: Position, fill: Fill): Position
         requires CanApplyBuy(position, fill)
         ensures IsValidPosition(ApplyBuy(position, fill))
+        ensures IsOpen(ApplyBuy(position, fill))
     {
         Position(
             position.symbol,
