@@ -257,8 +257,13 @@ quantity to the verified order model.
 
 ## 8. Market hours and extended hours
 
-A normal client order is rejected locally when the broker says the regular
-market is closed:
+The overall pattern is normal for US-equity brokers: regular and extended
+sessions have different liquidity and order rules. The exact sessions,
+supported assets, order types, and time-in-force values are nevertheless broker
+specific.
+
+VQC deliberately rejects a normal client order locally when the configured
+broker says its regular market is closed:
 
 ```python
 if client.MarketIsOpen():
@@ -276,9 +281,20 @@ client.LimitOrder(
 )
 ```
 
+This matches the included Alpaca adapter: Alpaca accepts extended-hours equity
+orders only as limit orders with a supported time in force; VQC currently sends
+`DAY`. Requiring a limit is also common at other brokers because thin
+extended-hours liquidity makes an unbounded market order risky, but another
+broker may have different rules.
+
 The flag means the order is eligible outside the regular session. It does not
 guarantee a fill. Your strategy must obtain a current quote and choose its own
 acceptable limit; VQC does not invent a price when market data is missing.
+
+Some brokers allow a regular-hours order submitted after closing to queue for
+the next session. VQC intentionally does not do that: without
+`extended_hours=True`, it fails immediately so a strategy cannot accidentally
+leave an order waiting overnight.
 
 Market-clock and extended-hours decisions are intentionally outside Dafny: they
 depend on live broker rules and data. Dafny verifies the resulting order and
