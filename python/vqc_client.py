@@ -1,27 +1,23 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
-from decimal import Decimal
-from threading import RLock, Thread
+from threading import RLock
 from typing import Any
-from uuid import uuid4
 
-from dotenv import load_dotenv
+from bindings.broker_adapter import BrokerAdapter
+from vqc_daemon import VQCDaemon
+from vqc_utility import Logger
 
-from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
-from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
-from alpaca.trading.stream import TradingStream
 
-from vqc_broker_adapter import BrokerAdapter
-from vqc_diagnostics import Logger
-from vqc_utility import VQCUtility
-from vqc import VQC
+def _DefaultAdapter() -> BrokerAdapter:
+    from bindings.alpaca_adapter import AlpacaAdapter
+
+    return AlpacaAdapter()
+
 
 @dataclass
 class VQCClient:
-    """Small broker boundary around the verified VQC account model."""
+    """Order-submission boundary backed by a synchronized VQC daemon."""
 
     api_key: str | None = None
     secret_key: str | None = None
@@ -29,170 +25,34 @@ class VQCClient:
     paper: bool = True
     start_trade_stream: bool = True
     broker: Any | None = None
-    account: Any = field(default=None, init=False)
-    order_ids: dict[str, int] = field(default_factory=dict, init=False)
-    fill_ids: dict[str, int] = field(default_factory=dict, init=False)
-    trade_stream_thread: Thread | None = field(default=None, init=False, repr=False)
-    state_lock: Any = field(default_factory=RLock, init=False, repr=False)
+    adapter: BrokerAdapter = field(default_factory=_DefaultAdapter)
     logger: Logger = field(default_factory=Logger)
+    account: Any = field(default=None, init=False)
+    state_lock: Any = field(default_factory=RLock, init=False, repr=False)
+    daemon: VQCDaemon = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.broker is None:
             self.broker = self.MakeBroker()
-        self.SyncAccountFromBroker()
-        if self.start_trade_stream and self.api_key and self.secret_key:
-            self.StartTradeStream()
+        self.daemon = VQCDaemon(self)
+        self.daemon.SyncAccountFromBroker()
+        if self.start_trade_stream and self.adapter.CanStream(self):
+            self.daemon.StartTradeStream()
 
-    def MakeBroker(self) -> TradingClient:
-        load_dotenv("KEYS.env")
-        self.api_key = self.api_key or os.getenv("ALPACA_API_KEY")
-        self.secret_key = self.secret_key or os.getenv("ALPACA_SECRET_KEY")
-        self.url_override = self.url_override or os.getenv("ALPACA_BASE_URL") or os.getenv("ALPACA_URL")
-        if not self.api_key or not self.secret_key:
-            raise RuntimeError("Missing Alpaca credentials in KEYS.env")
-        return TradingClient(
-            self.api_key,
-            self.secret_key,
-            paper=self.paper,
-            url_override=self.url_override,
-        )
-
-    def SyncAccountFromBroker(self) -> None:
-        """Create one trusted VQC opening snapshot from current broker state."""
-        account_info = self.broker.get_account()
-        cash = Decimal(str(account_info.cash))
-        broker_positions = self.broker.get_all_positions()
-        positions = [BrokerAdapter.ToVQCPosition(position) for position in broker_positions]
-        broker_orders = self.broker.get_orders(
-            filter=GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=500)
-        )
-        orders = [
-            BrokerAdapter.ToVQCOrder(broker_order, order_id)
-            for order_id, broker_order in enumerate(broker_orders, start=1)
-        ]
-        with self.state_lock:
-            self.account = VQC.Bootstrap(VQC.Money.FromDecimal(cash), positions, orders)
-            self.order_ids = {
-                VQCUtility.GetOrderKey(broker_order): order_id
-                for order_id, broker_order in enumerate(broker_orders, start=1)
-            }
-        self.logger.Log("Client", "Bootstrapped account from broker state.")
-
-    def NextOrderId(self) -> int:
-        with self.state_lock:
-            return VQCUtility.NextOrderId(self.account.orders)
-
-    def _SetOrderStatus(self, broker_order: Any) -> None:
-        """Apply a non-execution lifecycle event reported by the broker."""
-        with self.state_lock:
-            vqc_order_id = self.order_ids[VQCUtility.GetOrderKey(broker_order)]
-            status = BrokerAdapter.ToVQCStatus(VQCUtility.GetField(broker_order, "status", "new"))
-            if status in {"partially_filled", "filled"}:
-                raise ValueError("filled broker orders must be applied through a fill event")
-            self.account = VQC.SetOrderStatus(self.account, vqc_order_id, status)
-
-    def HandleTradeUpdate(self, update: Any) -> None:
-        """Apply one Alpaca trade-update event to the verified account.
-
-        Only ``partial_fill`` and ``fill`` events call VQC.Update. All other
-        lifecycle events only change the order status.
-        """
-        with self.state_lock:
-            event = str(VQCUtility.GetField(update, "event", "")).lower()
-            broker_order = VQCUtility.GetField(update, "order")
-            if broker_order is None:
-                raise ValueError("trade update is missing its order")
-
-            broker_order_key = VQCUtility.GetOrderKey(broker_order)
-            if broker_order_key not in self.order_ids:
-                self.logger.Log(
-                    "Reconciliation",
-                    f"Untracked broker order {broker_order_key}; refreshing account from broker.",
-                )
-                self.SyncAccountFromBroker()
-                return
-
-            if event not in {"partial_fill", "fill"}:
-                self._SetOrderStatus(broker_order)
-                return
-
-            external_execution_id = VQCUtility.GetField(update, "execution_id")
-            if external_execution_id is None:
-                raise ValueError("fill update is missing its execution ID")
-            external_execution_key = str(external_execution_id)
-            if external_execution_key in self.fill_ids:
-                return
-
-            vqc_order_id = self.order_ids[broker_order_key]
-            vqc_fill = BrokerAdapter.ToVQCFill(
-                update,
-                execution_id=max(self.fill_ids.values(), default=0) + 1,
-                order_id=vqc_order_id,
-            )
-            self.account = VQC.Update(self.account, vqc_fill)
-            self.logger.Log(
-                "Validation",
-                f"Applied fill for {vqc_fill.symbol} x {vqc_fill.quantity} at {vqc_fill.price}.",
-            )
-            self.fill_ids[external_execution_key] = vqc_fill.executionId
-
-    async def OnTradeUpdate(self, update: Any) -> None:
-        """Async callback suitable for TradingStream.subscribe_trade_updates."""
-        self.HandleTradeUpdate(update)
-
-    def RunTradeStream(self) -> None:
-        """Run Alpaca's trade-update stream; call this before submitting orders."""
-        if not self.api_key or not self.secret_key:
-            raise RuntimeError("Alpaca credentials are required to run the trade stream")
-        stream = TradingStream(
-            self.api_key,
-            self.secret_key,
-            paper=self.paper,
-            url_override=self.url_override,
-        )
-        stream.subscribe_trade_updates(self.OnTradeUpdate)
-        stream.run()
-
-    def StartTradeStream(self) -> None:
-        """Start the broker event stream once, without blocking the caller."""
-        if self.trade_stream_thread and self.trade_stream_thread.is_alive():
-            return
-        self.trade_stream_thread = Thread(
-            target=self.RunTradeStream,
-            name="vqc-alpaca-trade-stream",
-            daemon=True,
-        )
-        self.trade_stream_thread.start()
-
-    def MarketIsOpen(self) -> bool:
-        clock = self.broker.get_clock()
-        self.logger.Log("Client", f"Market is {'open' if clock.is_open else 'closed'}.")
-        return clock.is_open
+    def MakeBroker(self) -> Any:
+        return self.adapter.MakeBroker(self)
 
     def SubmitOrder(self, symbol: str, quantity: float, side: str) -> Any:
         if not self.MarketIsOpen():
-            raise RuntimeError(f"[VQC][Client] Market is closed; cannot submit {side} order for {symbol} now.")
-
-        client_order_id = str(uuid4())
-        order = MarketOrderRequest(
-            symbol=symbol,
-            qty=quantity,
-            side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
-            time_in_force=TimeInForce.DAY,
-            client_order_id=client_order_id,
-        )
-
-        result = self.broker.submit_order(order_data=order)
-        with self.state_lock:
-            vqc_order_id = VQCUtility.NextOrderId(self.account.orders)
-            vqc_order = VQC.Order(vqc_order_id, symbol, int(quantity), side, "market", "new", 0)
-            self.account = VQC.PlaceOrder(self.account, vqc_order)
-            self.order_ids[VQCUtility.GetOrderKey(result)] = vqc_order_id
+            raise RuntimeError(
+                f"[VQC][Client] Market is closed; cannot submit {side} order for {symbol} now."
+            )
+        result = self.adapter.SubmitOrder(self.broker, symbol, quantity, side)
+        self.daemon.TrackSubmittedOrder(result, symbol, quantity, side)
         self.logger.Log("Validation", f"Submitted {side} order for {symbol} x {quantity}.")
-        result_status = BrokerAdapter.ToVQCStatus(VQCUtility.GetField(result, "status", "new"))
-        if result_status not in {"new", "partially_filled", "filled"}:
-            self.logger.Log("Validation", f"Order status is {result_status}")
-            self._SetOrderStatus(result)
+        status = self.adapter.GetOrderStatus(result)
+        if status not in {"new", "partially_filled", "filled"}:
+            self.logger.Log("Validation", f"Order status is {status}")
         return result
 
     def Buy(self, symbol: str, quantity: float = 1.0) -> Any:
@@ -201,5 +61,13 @@ class VQCClient:
     def Sell(self, symbol: str, quantity: float = 1.0) -> Any:
         return self.SubmitOrder(symbol, quantity, "sell")
 
+    def MarketIsOpen(self) -> bool:
+        is_open = self.adapter.IsMarketOpen(self.broker)
+        self.logger.Log("Client", f"Market is {'open' if is_open else 'closed'}.")
+        return is_open
+
     def __repr__(self) -> str:
         return f"VQCClient(account_cash={self.account.cash})"
+
+
+__all__ = ["VQCClient"]

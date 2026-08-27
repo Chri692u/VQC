@@ -6,7 +6,7 @@ import schedule
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vqc_client import VQCClient
-from vqc_diagnostics import DisplayLedger, Logger
+from vqc_utility import DisplayLedger, Logger
 
 BUY_INTERVAL = 1
 BUY_INTERVAL_UNIT = "minutes"
