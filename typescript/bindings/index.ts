@@ -27,5 +27,8 @@ export type {
     FillRecord,
     Ledger,
     OrderRecord,
+    OrderSide,
+    OrderStatus,
+    OrderType,
     PositionRecord,
 } from "./vqc_types";

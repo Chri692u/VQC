@@ -1,35 +1,102 @@
+from decimal import Decimal, InvalidOperation, ROUND_UP
+import os
 from pathlib import Path
 import sys
 import time
+
 import schedule
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockLatestQuoteRequest
+from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vqc_client import VQCClient
-from vqc_utility import DisplayLedger, Logger
+from vqc_utility import DisplayAccount, DisplayLedger, Logger
 
 BUY_INTERVAL = 1
 BUY_INTERVAL_UNIT = "minutes"
+SYMBOLS = ["GLD", "SLV"]
+LIMIT_BUFFER = Decimal("1.005")
 
-def buy_gold_and_silver(vqc_client: VQCClient, logger: Logger):
-    logger.Log("Example", "Starting interval buy for GLD and SLV.")
-    for symbol in ["GLD", "SLV"]:
+
+class MarketDataUnavailableError(RuntimeError):
+    """Raised when the strategy cannot derive a price from its market-data feed."""
+
+
+def GetExtendedHoursLimit(data: StockHistoricalDataClient, symbol: str) -> Decimal:
+    """Return a conservatively rounded buy limit from the latest ask quote."""
+    quotes = data.get_stock_latest_quote(
+        StockLatestQuoteRequest(symbol_or_symbols=symbol)
+    )
+    quote = quotes.get(symbol)
+    if quote is None:
+        raise MarketDataUnavailableError(
+            f"Alpaca's configured market-data feed returned no quote for {symbol}; "
+            "no order was submitted."
+        )
+    try:
+        ask = Decimal(str(quote.ask_price))
+    except InvalidOperation as error:
+        raise MarketDataUnavailableError(
+            f"Alpaca's configured market-data feed returned invalid "
+            f"ask={quote.ask_price!r} for {symbol}; no order was submitted."
+        ) from error
+    if ask <= 0:
+        raise MarketDataUnavailableError(
+            f"Alpaca's configured market-data feed returned ask={quote.ask_price!r} "
+            f"for {symbol}; no order was submitted."
+        )
+    return (ask * LIMIT_BUFFER).quantize(Decimal("0.01"), rounding=ROUND_UP)
+
+
+def BuyGoldAndSilver(
+    client: VQCClient,
+    data: StockHistoricalDataClient,
+    logger: Logger,
+) -> None:
+    """Place one-share orders appropriate for the broker's market clock."""
+    regular_market = client.MarketIsOpen()
+    for symbol in SYMBOLS:
         try:
-            vqc_client.Buy(symbol, 1)
+            if regular_market:
+                client.MarketOrder(symbol, 1)
+            else:
+                limit_price = GetExtendedHoursLimit(data, symbol)
+                client.LimitOrder(
+                    symbol,
+                    1,
+                    limit_price,
+                    extended_hours=True,
+                )
+                logger.Log("Example", f"Extended-hours {symbol} limit: ${limit_price}.")
         except Exception as error:
-            logger.Log("Example", f"Could not submit {symbol}: {error}")
+            logger.Log(
+                "Example",
+                f"Could not process {symbol}: {type(error).__name__}: {error}",
+            )
+
 
 if __name__ == "__main__":
-    logger = Logger(mute=False)
-    vqc_client = VQCClient(logger=logger)
-    logger.Log("Example", f"Initialized client with cash: {vqc_client.account.cash}")
-    logger.Log("Example", f"Broker time: {vqc_client.broker.get_clock().timestamp}")
-    logger.Log("Diagnostics", DisplayLedger(vqc_client.account.ledger))
+    load_dotenv("KEYS.env")
+    logger = Logger()
+    client = VQCClient(logger=logger)
+    data = StockHistoricalDataClient(
+        os.getenv("ALPACA_API_KEY"),
+        os.getenv("ALPACA_SECRET_KEY"),
+    )
+
+    logger.Log("Example", DisplayAccount(client.account))
+    logger.Log("Example", DisplayLedger(client.account.ledger))
+
+    BuyGoldAndSilver(client, data, logger)
     getattr(schedule.every(BUY_INTERVAL), BUY_INTERVAL_UNIT).do(
-        buy_gold_and_silver,
-        vqc_client=vqc_client,
+        BuyGoldAndSilver,
+        client=client,
+        data=data,
         logger=logger,
     )
+
     try:
         while True:
             schedule.run_pending()

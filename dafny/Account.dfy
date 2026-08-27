@@ -37,26 +37,33 @@ module AccountOps {
         cash: Money,
         positions: seq<Position>,
         orders: seq<Order>,
-        id: LedgerId,
+        ledgerId: LedgerId,
         timestamp: nat
     ): Account
-        requires CanBootstrap(cash, positions, orders, id)
-        ensures IsValidAccount(BootstrapCore(cash, positions, orders, id, timestamp))
-        ensures BootstrapCore(cash, positions, orders, id, timestamp).cash == cash
-        ensures BootstrapCore(cash, positions, orders, id, timestamp).positions == positions
-        ensures BootstrapCore(cash, positions, orders, id, timestamp).orders == orders
-        ensures BootstrapCore(cash, positions, orders, id, timestamp).ledger ==
-            Ledger([Opening(id, cash, positions, orders, timestamp)])
+        requires CanBootstrap(cash, positions, orders, ledgerId)
+        ensures IsValidAccount(BootstrapCore(cash, positions, orders, ledgerId, timestamp))
+        ensures BootstrapCore(cash, positions, orders, ledgerId, timestamp).cash == cash
+        ensures BootstrapCore(cash, positions, orders, ledgerId, timestamp).positions == positions
+        ensures BootstrapCore(cash, positions, orders, ledgerId, timestamp).orders == orders
+        ensures BootstrapCore(cash, positions, orders, ledgerId, timestamp).ledger ==
+            Ledger([Opening(ledgerId, cash, positions, orders, timestamp)])
     {
-        Account(cash, Ledger([Opening(id, cash, positions, orders, timestamp)]), positions, orders)
+        Account(
+            cash,
+            Ledger([Opening(ledgerId, cash, positions, orders, timestamp)]),
+            positions,
+            orders
+        )
     }
 
     // Adds a deposit to the account ledger and cash balance.
-    function DepositCore(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
-        requires CanDeposit(account, id, amount)
-        ensures IsValidAccount(DepositCore(account, id, amount, timestamp))
+    function DepositCore(
+        account: Account, ledgerId: LedgerId, amount: Money, timestamp: nat
+    ): Account
+        requires CanDeposit(account, ledgerId, amount)
+        ensures IsValidAccount(DepositCore(account, ledgerId, amount, timestamp))
     {
-        var entry := LedgerEntry.Deposit(id, amount, timestamp);
+        var entry := LedgerEntry.Deposit(ledgerId, amount, timestamp);
         var nextLedger := Append(account.ledger, entry);
         Account(
             Add(account.cash, amount),
@@ -67,11 +74,13 @@ module AccountOps {
     }
 
     // Removes a withdrawal from the account ledger and cash balance.
-    function WithdrawCore(account: Account, id: LedgerId, amount: Money, timestamp: nat): Account
-        requires CanWithdraw(account, id, amount)
-        ensures IsValidAccount(WithdrawCore(account, id, amount, timestamp))
+    function WithdrawCore(
+        account: Account, ledgerId: LedgerId, amount: Money, timestamp: nat
+    ): Account
+        requires CanWithdraw(account, ledgerId, amount)
+        ensures IsValidAccount(WithdrawCore(account, ledgerId, amount, timestamp))
     {
-        var entry := LedgerEntry.Withdrawal(id, amount, timestamp);
+        var entry := LedgerEntry.Withdrawal(ledgerId, amount, timestamp);
         var nextLedger := Append(account.ledger, entry);
         Account(
             Sub(account.cash, amount),
@@ -160,35 +169,39 @@ module AccountOps {
         )
     }
 
-    method Deposit(account: Account, id: LedgerId, amount: Money, timestamp: nat) returns (result: Account)
+    method Deposit(
+        account: Account, ledgerId: LedgerId, amount: Money, timestamp: nat
+    ) returns (result: Account)
         ensures IsValidAccount(result)
     {
-        expect CanDeposit(account, id, amount);
-        result := DepositCore(account, id, amount, timestamp);
+        expect CanDeposit(account, ledgerId, amount);
+        result := DepositCore(account, ledgerId, amount, timestamp);
     }
 
     method Bootstrap(
         cash: Money,
         positions: seq<Position>,
         orders: seq<Order>,
-        id: LedgerId,
+        ledgerId: LedgerId,
         timestamp: nat
     ) returns (result: Account)
         ensures IsValidAccount(result)
         ensures result.cash == cash
         ensures result.positions == positions
         ensures result.orders == orders
-        ensures result.ledger == Ledger([Opening(id, cash, positions, orders, timestamp)])
+        ensures result.ledger == Ledger([Opening(ledgerId, cash, positions, orders, timestamp)])
     {
-        expect CanBootstrap(cash, positions, orders, id);
-        result := BootstrapCore(cash, positions, orders, id, timestamp);
+        expect CanBootstrap(cash, positions, orders, ledgerId);
+        result := BootstrapCore(cash, positions, orders, ledgerId, timestamp);
     }
 
-    method Withdraw(account: Account, id: LedgerId, amount: Money, timestamp: nat) returns (result: Account)
+    method Withdraw(
+        account: Account, ledgerId: LedgerId, amount: Money, timestamp: nat
+    ) returns (result: Account)
         ensures IsValidAccount(result)
     {
-        expect CanWithdraw(account, id, amount);
-        result := WithdrawCore(account, id, amount, timestamp);
+        expect CanWithdraw(account, ledgerId, amount);
+        result := WithdrawCore(account, ledgerId, amount, timestamp);
     }
 
     method PlaceOrder(account: Account, order: Order) returns (result: Account)

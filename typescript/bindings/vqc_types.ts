@@ -16,7 +16,7 @@ export type FillRecord = { readonly [fillBrand]: "Fill" };
 export type PositionRecord = { readonly [positionBrand]: "Position" };
 
 export type OrderSide = "buy" | "sell";
-export type OrderType = "market" | "limit";
+export type OrderType = "market" | "limit" | "stop" | "stop_limit";
 export type OrderStatus =
     | "new"
     | "accepted"
@@ -29,7 +29,7 @@ type DafnyOrderSide = { readonly _dafnyOrderSide: unique symbol };
 type DafnyOrderType = { readonly _dafnyOrderType: unique symbol };
 type DafnyOrderStatus = { readonly _dafnyOrderStatus: unique symbol };
 
-function SideEnum(side: OrderSide): DafnyOrderSide {
+function toDafnyOrderSide(side: OrderSide): DafnyOrderSide {
     if (side === "buy") {
         return Dafny.Types.OrderSide.create_Buy() as DafnyOrderSide;
     }
@@ -39,8 +39,8 @@ function SideEnum(side: OrderSide): DafnyOrderSide {
     throw new Error(`unsupported side: ${side}`);
 }
 
-/** Converts a public status string to the generated Dafny status value. */
-export function StatusEnum(status: OrderStatus): DafnyOrderStatus {
+/** @internal Converts a public status to the generated Dafny status value. */
+export function toDafnyOrderStatus(status: OrderStatus): DafnyOrderStatus {
     switch (status) {
         case "new": return Dafny.Types.OrderStatus.create_New() as DafnyOrderStatus;
         case "accepted": return Dafny.Types.OrderStatus.create_Accepted() as DafnyOrderStatus;
@@ -61,6 +61,7 @@ export function Order(
     status: OrderStatus = "new",
     filledQuantity: IntegerInput = 0,
     limitPrice?: Money,
+    stopPrice?: Money,
 ): OrderRecord {
     let orderTypeEnum: DafnyOrderType;
     if (orderType === "market") {
@@ -70,6 +71,19 @@ export function Order(
             throw new Error("limit order requires a limitPrice");
         }
         orderTypeEnum = Dafny.Types.OrderType.create_Limit(limitPrice) as DafnyOrderType;
+    } else if (orderType === "stop") {
+        if (stopPrice === undefined) {
+            throw new Error("stop order requires a stopPrice");
+        }
+        orderTypeEnum = Dafny.Types.OrderType.create_Stop(stopPrice) as DafnyOrderType;
+    } else if (orderType === "stop_limit") {
+        if (stopPrice === undefined || limitPrice === undefined) {
+            throw new Error("stop-limit order requires stopPrice and limitPrice");
+        }
+        orderTypeEnum = Dafny.Types.OrderType.create_StopLimit(
+            stopPrice,
+            limitPrice,
+        ) as DafnyOrderType;
     } else {
         throw new Error(`unsupported order type: ${orderType}`);
     }
@@ -78,9 +92,9 @@ export function Order(
         Natural(orderId, "orderId"),
         StringValue(symbol, "symbol"),
         Natural(quantity, "quantity"),
-        SideEnum(side),
+        toDafnyOrderSide(side),
         orderTypeEnum,
-        StatusEnum(status),
+        toDafnyOrderStatus(status),
         Natural(filledQuantity, "filledQuantity"),
     ) as OrderRecord;
 }

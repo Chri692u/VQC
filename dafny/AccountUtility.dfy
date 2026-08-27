@@ -23,23 +23,23 @@ module AccountUtility {
         LedgerId(MaxLedgerId(ledger.entries) + 1)
     }
 
-    predicate ExistsOrder(orders: seq<Order>, target: OrderId)
+    predicate ExistsOrder(orders: seq<Order>, orderId: OrderId)
     {
-        exists i :: 0 <= i < |orders| && orders[i].orderId == target
+        exists i :: 0 <= i < |orders| && orders[i].orderId == orderId
     }
 
-    function GetOrder(orders: seq<Order>, target: OrderId): Order
+    function GetOrder(orders: seq<Order>, orderId: OrderId): Order
         requires IsValidOrderSet(orders)
-        requires ExistsOrder(orders, target)
-        ensures GetOrder(orders, target).orderId == target
+        requires ExistsOrder(orders, orderId)
+        ensures GetOrder(orders, orderId).orderId == orderId
         decreases |orders|
     {
         if |orders| == 0 then
             Order(OrderId(0), "", 0, Buy, Market, New, 0)
-        else if orders[0].orderId == target then
+        else if orders[0].orderId == orderId then
             orders[0]
         else
-            GetOrder(orders[1..], target)
+            GetOrder(orders[1..], orderId)
     }
 
     function UpdateOrder(orders: seq<Order>, updated: Order): seq<Order>

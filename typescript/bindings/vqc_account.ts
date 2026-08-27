@@ -8,7 +8,7 @@ import {
     OrderRecord,
     OrderStatus,
     PositionRecord,
-    StatusEnum,
+    toDafnyOrderStatus,
 } from "./vqc_types";
 
 /** Returns a new empty account. */
@@ -61,7 +61,7 @@ export function SetOrderStatus(
     account: Account, orderId: IntegerInput, newStatus: OrderStatus,
 ): Account {
     return Dafny.AccountOps.__default.SetOrderStatus(
-        account, Natural(orderId, "orderId"), StatusEnum(newStatus),
+        account, Natural(orderId, "orderId"), toDafnyOrderStatus(newStatus),
     ) as Account;
 }
 

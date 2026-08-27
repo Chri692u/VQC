@@ -9,7 +9,11 @@ module Types {
 
     // Order lifecycle and pricing.
     datatype OrderSide = Buy | Sell
-    datatype OrderType = Market | Limit(limitPrice: Money)
+    datatype OrderType =
+        | Market
+        | Limit(limitPrice: Money)
+        | Stop(stopPrice: Money)
+        | StopLimit(stopPrice: Money, limitPrice: Money)
     datatype OrderStatus = New | Accepted | PartiallyFilled | Filled | Cancelled | Rejected
 
     // Order representation.
@@ -44,15 +48,15 @@ module Types {
     // Ledger history.
     datatype LedgerEntry =
         | Opening(
-            id: LedgerId,
+            ledgerId: LedgerId,
             cash: Money,
             positions: seq<Position>,
             orders: seq<Order>,
             timestamp: nat
         )
-        | Deposit(id: LedgerId, amount: Money, timestamp: nat)
-        | Withdrawal(id: LedgerId, amount: Money, timestamp: nat)
-        | Trade(id: LedgerId, fill: Fill)
+        | Deposit(ledgerId: LedgerId, amount: Money, timestamp: nat)
+        | Withdrawal(ledgerId: LedgerId, amount: Money, timestamp: nat)
+        | Trade(ledgerId: LedgerId, fill: Fill)
 
     datatype Ledger = Ledger(entries: seq<LedgerEntry>)
 
@@ -60,10 +64,10 @@ module Types {
     function EntryId(entry: LedgerEntry): LedgerId
     {
         match entry
-            case Opening(id, _, _, _, _) => id
-            case Deposit(id, _, _) => id
-            case Withdrawal(id, _, _) => id
-            case Trade(id, _) => id
+            case Opening(ledgerId, _, _, _, _) => ledgerId
+            case Deposit(ledgerId, _, _) => ledgerId
+            case Withdrawal(ledgerId, _, _) => ledgerId
+            case Trade(ledgerId, _) => ledgerId
     }
 
     // Account state.

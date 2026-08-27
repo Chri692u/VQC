@@ -20,19 +20,19 @@ module Validation {
     }
 
     // Identifier checks.
-    predicate IsValidOrderId(id: OrderId)
+    predicate IsValidOrderId(orderId: OrderId)
     {
-        id.value > 0
+        orderId.value > 0
     }
 
-    predicate IsValidExecutionId(id: ExecutionId)
+    predicate IsValidExecutionId(executionId: ExecutionId)
     {
-        id.value > 0
+        executionId.value > 0
     }
 
-    predicate IsValidLedgerId(id: LedgerId)
+    predicate IsValidLedgerId(ledgerId: LedgerId)
     {
-        id.value > 0
+        ledgerId.value > 0
     }
 
     // Shared checks.
@@ -62,6 +62,9 @@ module Validation {
         match order.orderType
             case Market => true
             case Limit(limitPrice) => IsPositive(limitPrice)
+            case Stop(stopPrice) => IsPositive(stopPrice)
+            case StopLimit(stopPrice, limitPrice) =>
+                IsPositive(stopPrice) && IsPositive(limitPrice)
     }
 
     // Status compatibility is a lifecycle rule. It is intentionally separate
@@ -276,9 +279,9 @@ module Validation {
     }
 
     // Ledger checks.
-    predicate ContainsLedgerId(entries: seq<LedgerEntry>, id: LedgerId)
+    predicate ContainsLedgerId(entries: seq<LedgerEntry>, ledgerId: LedgerId)
     {
-        exists i :: 0 <= i < |entries| && EntryId(entries[i]) == id
+        exists i :: 0 <= i < |entries| && EntryId(entries[i]) == ledgerId
     }
 
     predicate AllUniqueLedgerIds(entries: seq<LedgerEntry>)
@@ -289,17 +292,17 @@ module Validation {
     predicate IsValidEntry(entry: LedgerEntry)
     {
         match entry
-            case Opening(id, _, positions, orders, _) =>
-                IsValidLedgerId(id) &&
+            case Opening(ledgerId, _, positions, orders, _) =>
+                IsValidLedgerId(ledgerId) &&
                 IsValidPositionSet(positions) &&
                 IsValidOrderSet(orders) &&
                 HasLifecycleConsistentOrders(orders)
-            case Deposit(id, amount, _) =>
-                IsValidLedgerId(id) && IsPositive(amount)
-            case Withdrawal(id, amount, _) =>
-                IsValidLedgerId(id) && IsPositive(amount)
-            case Trade(id, fill) =>
-                IsValidLedgerId(id) && IsValidFill(fill)
+            case Deposit(ledgerId, amount, _) =>
+                IsValidLedgerId(ledgerId) && IsPositive(amount)
+            case Withdrawal(ledgerId, amount, _) =>
+                IsValidLedgerId(ledgerId) && IsPositive(amount)
+            case Trade(ledgerId, fill) =>
+                IsValidLedgerId(ledgerId) && IsValidFill(fill)
     }
 
     predicate IsOpeningEntry(entry: LedgerEntry)

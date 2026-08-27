@@ -24,6 +24,9 @@ from bindings import (
     NewAccount,
     Order,
     OrderRecord,
+    OrderSide,
+    OrderStatus,
+    OrderType,
     PlaceOrder,
     Position,
     PositionRecord,
@@ -39,14 +42,23 @@ EnsureDafnyCore()
 
 from _dafny import HaltException
 
+
 class VQC:
+    """Documented namespace for the verified public Python API."""
+
+    # Public generated record types and broker-neutral enums.
     HaltException = HaltException
     Money = Money
     Account = Account
     Ledger = Ledger
     OrderRecord = OrderRecord
+    OrderSide = OrderSide
+    OrderStatus = OrderStatus
+    OrderType = OrderType
     FillRecord = FillRecord
     PositionRecord = PositionRecord
+
+    # Verified account transitions and record constructors.
     NewAccount = NewAccount
     Bootstrap = Bootstrap
     Deposit = Deposit
@@ -60,6 +72,8 @@ class VQC:
     Cost = Cost
     RemainingQuantity = RemainingQuantity
     SetOrderStatus = SetOrderStatus
+
+    # Read-only validation predicates.
     IsValidOrder = IsValidOrder
     IsValidFill = IsValidFill
     IsValidPosition = IsValidPosition
@@ -67,31 +81,4 @@ class VQC:
     IsValidAccount = IsValidAccount
 
 
-__all__ = [
-    "Money",
-    "Account",
-    "Ledger",
-    "OrderRecord",
-    "FillRecord",
-    "PositionRecord",
-    "HaltException",
-    "VQC",
-    "NewAccount",
-    "Bootstrap",
-    "Deposit",
-    "Withdraw",
-    "PlaceOrder",
-    "Update",
-    "Order",
-    "Fill",
-    "Position",
-    "Sum",
-    "Cost",
-    "RemainingQuantity",
-    "SetOrderStatus",
-    "IsValidOrder",
-    "IsValidFill",
-    "IsValidPosition",
-    "IsValidLedger",
-    "IsValidAccount",
-]
+__all__ = ["HaltException", "VQC"]

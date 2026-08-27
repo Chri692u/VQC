@@ -5,6 +5,16 @@ from vqc import HaltException, VQC
 
 
 class DafnyRuntimeNegativeTests(unittest.TestCase):
+    def test_python_order_status_requires_enum(self):
+        with self.assertRaisesRegex(ValueError, "unsupported status"):
+            VQC.Order(1, "GLD", 1, status="new")
+
+    def test_money_rejects_boolean_and_currency_multiplication(self):
+        with self.assertRaises(TypeError):
+            VQC.Money.FromDecimal(True)
+        with self.assertRaises(TypeError):
+            VQC.Money.FromDecimal("2") * VQC.Money.FromDecimal("3")
+
     def test_dafny_exception_can_be_reported(self):
         try:
             VQC.Withdraw(VQC.Deposit(VQC.NewAccount(), 100, 1, 0), 101, 2, 0)
@@ -29,14 +39,14 @@ class DafnyRuntimeNegativeTests(unittest.TestCase):
 
     def test_invalid_order_raises_dafny_runtime_error(self):
         account = VQC.NewAccount()
-        invalid_order = VQC.Order(1, "GLD", 0, "buy", "market", "new", 0)
+        invalid_order = VQC.Order(1, "GLD", 0, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0)
 
         with self.assertRaises(HaltException):
             VQC.PlaceOrder(account, invalid_order)
 
     def test_fill_larger_than_remaining_quantity_raises_dafny_runtime_error(self):
         account = VQC.Deposit(VQC.NewAccount(), 1000, 1, 0)
-        order = VQC.Order(1, "GLD", 1, "buy", "market", "new", 0)
+        order = VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0)
         account = VQC.PlaceOrder(account, order)
         invalid_fill = VQC.Fill(1, 1, "GLD", 2, 100, 0)
 
@@ -46,12 +56,12 @@ class DafnyRuntimeNegativeTests(unittest.TestCase):
     def test_invalid_order_status_transition_raises_dafny_runtime_error(self):
         account = VQC.PlaceOrder(
             VQC.NewAccount(),
-            VQC.Order(1, "GLD", 1, "buy", "market", "new", 0),
+            VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0),
         )
-        account = VQC.SetOrderStatus(account, 1, "accepted")
+        account = VQC.SetOrderStatus(account, 1, VQC.OrderStatus.ACCEPTED)
 
         with self.assertRaises(HaltException):
-            VQC.SetOrderStatus(account, 1, "new")
+            VQC.SetOrderStatus(account, 1, VQC.OrderStatus.NEW)
 
 
 if __name__ == "__main__":

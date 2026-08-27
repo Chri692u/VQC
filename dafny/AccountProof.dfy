@@ -15,25 +15,27 @@ module AccountProof {
     // public proof boundary. Domain preservation lemmas live beside the
     // corresponding model: LedgerProof, OrderProof, and PositionProof.
 
-    predicate CanDeposit(account: Account, id: LedgerId, amount: Money)
+    predicate CanDeposit(account: Account, ledgerId: LedgerId, amount: Money)
     {
         IsValidAccount(account) &&
-        IsValidLedgerId(id) &&
+        IsValidLedgerId(ledgerId) &&
         IsPositive(amount) &&
-        !ContainsLedgerId(account.ledger.entries, id)
+        !ContainsLedgerId(account.ledger.entries, ledgerId)
     }
 
-    predicate CanBootstrap(cash: Money, positions: seq<Position>, orders: seq<Order>, id: LedgerId)
+    predicate CanBootstrap(
+        cash: Money, positions: seq<Position>, orders: seq<Order>, ledgerId: LedgerId
+    )
     {
-        IsValidLedgerId(id) &&
+        IsValidLedgerId(ledgerId) &&
         IsValidPositionSet(positions) &&
         IsValidOrderSet(orders) &&
         HasLifecycleConsistentOrders(orders)
     }
 
-    predicate CanWithdraw(account: Account, id: LedgerId, amount: Money)
+    predicate CanWithdraw(account: Account, ledgerId: LedgerId, amount: Money)
     {
-        CanDeposit(account, id, amount) &&
+        CanDeposit(account, ledgerId, amount) &&
         Gte(account.cash, amount)
     }
 

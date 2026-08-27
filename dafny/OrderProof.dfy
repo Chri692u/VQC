@@ -17,17 +17,19 @@ module OrderProof {
     }
 
     // Replacing one order cannot introduce an ID which was previously absent.
-    lemma UpdateOrderPreservesMissingId(orders: seq<Order>, updated: Order, id: OrderId)
+    lemma UpdateOrderPreservesMissingId(
+        orders: seq<Order>, updated: Order, orderId: OrderId
+    )
         requires IsValidOrderSet(orders)
         requires IsValidOrder(updated)
         requires ExistsOrder(orders, updated.orderId)
-        requires !ExistsOrder(orders, id)
-        ensures !ExistsOrder(UpdateOrder(orders, updated), id)
+        requires !ExistsOrder(orders, orderId)
+        ensures !ExistsOrder(UpdateOrder(orders, updated), orderId)
         decreases |orders|
     {
         if orders[0].orderId != updated.orderId {
-            assert !ExistsOrder(orders[1..], id);
-            UpdateOrderPreservesMissingId(orders[1..], updated, id);
+            assert !ExistsOrder(orders[1..], orderId);
+            UpdateOrderPreservesMissingId(orders[1..], updated, orderId);
         }
     }
 

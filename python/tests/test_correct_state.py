@@ -11,7 +11,7 @@ class DafnyStateTests(unittest.TestCase):
         account = VQC.Withdraw(account, 100, 2, 0)
         self.assertEqual(account.cash, 900)
 
-        order = VQC.Order(1, "GLD", 2, "buy", "market", "new", 0)
+        order = VQC.Order(1, "GLD", 2, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0)
         account = VQC.PlaceOrder(account, order)
         self.assertEqual(len(account.orders), 1)
 
@@ -28,12 +28,12 @@ class DafnyStateTests(unittest.TestCase):
     def test_status_update_keeps_orders_as_a_dafny_sequence(self):
         account = VQC.PlaceOrder(
             VQC.NewAccount(),
-            VQC.Order(1, "GLD", 1, "buy", "market", "new", 0),
+            VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0),
         )
-        account = VQC.SetOrderStatus(account, 1, "accepted")
+        account = VQC.SetOrderStatus(account, 1, VQC.OrderStatus.ACCEPTED)
         account = VQC.PlaceOrder(
             account,
-            VQC.Order(2, "SLV", 1, "buy", "market", "new", 0),
+            VQC.Order(2, "SLV", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0),
         )
 
         self.assertEqual(len(account.orders), 2)
@@ -43,12 +43,12 @@ class DafnyStateTests(unittest.TestCase):
     def test_full_sell_removes_the_active_position_but_keeps_the_trade(self):
         account = VQC.PlaceOrder(
             VQC.NewAccount(),
-            VQC.Order(1, "GLD", 1, "buy", "market", "new", 0),
+            VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0),
         )
         account = VQC.Update(account, VQC.Fill(1, 1, "GLD", 1, 100, 0))
         account = VQC.PlaceOrder(
             account,
-            VQC.Order(2, "GLD", 1, "sell", "market", "new", 0),
+            VQC.Order(2, "GLD", 1, VQC.OrderSide.SELL, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0),
         )
         account = VQC.Update(account, VQC.Fill(2, 2, "GLD", 1, 110, 0))
 

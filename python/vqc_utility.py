@@ -8,16 +8,26 @@ from typing import Any
 
 
 class VQCUtility:
-    """Pure Python helpers mirroring the small Dafny utility layer."""
+    """Internal helpers shared by adapters and synchronization code."""
 
     @staticmethod
     def GetField(value: Any, name: str, default: Any = None) -> Any:
+        """Read a field uniformly from a broker object or mapping."""
         if isinstance(value, dict):
             return value.get(name, default)
         return getattr(value, name, default)
 
     @staticmethod
+    def RequireField(value: Any, name: str, label: str) -> Any:
+        """Read a required broker field and identify malformed responses."""
+        result = VQCUtility.GetField(value, name)
+        if result is None:
+            raise ValueError(f"{label} is missing {name}")
+        return result
+
+    @staticmethod
     def GetOrderKey(broker_order: Any) -> str:
+        """Return the stable string key for a broker-native order."""
         order_id = VQCUtility.GetField(broker_order, "id")
         if order_id is None:
             raise ValueError("broker order is missing its ID")
@@ -25,18 +35,10 @@ class VQCUtility:
 
     @staticmethod
     def NextOrderId(orders: Any) -> int:
+        """Choose the next local numeric order ID."""
         if not orders:
             return 1
         return max(order.orderId for order in orders) + 1
-
-    @staticmethod
-    def GetOrAddId(ids: dict[str, int], external_id: Any, label: str) -> int:
-        key = str(external_id)
-        if not key:
-            raise ValueError(f"{label} is missing its ID")
-        if key not in ids:
-            ids[key] = len(ids) + 1
-        return ids[key]
 
 
 @dataclass
@@ -46,6 +48,7 @@ class Logger:
     mute: bool = False
 
     def Log(self, component: str, message: str) -> None:
+        """Print a consistently tagged message unless output is muted."""
         if self.mute:
             return
         prefix = f"[VQC][{component}]"
@@ -53,6 +56,7 @@ class Logger:
 
 
 def ReportException(error: Exception) -> str:
+    """Return a concise report for a Dafny or Python runtime exception."""
     message = str(error)
     location = "unknown Dafny source"
     match = re.match(r"([^()]+\(\d+,\d+\)):", message)
@@ -69,13 +73,27 @@ def ReportException(error: Exception) -> str:
 
 
 def DisplayAccount(account: Any) -> str:
+    """Format a VQC account snapshot for diagnostics."""
+
+    def order_type(order: Any) -> str:
+        """Describe the generated order-type variant and its prices."""
+        value = order.orderType
+        if value.is_Limit:
+            return f"limit @{value.limitPrice}"
+        if value.is_Stop:
+            return f"stop @{value.stopPrice}"
+        if value.is_StopLimit:
+            return f"stop-limit stop={value.stopPrice} limit={value.limitPrice}"
+        return "market"
+
     position_lines = [
         f"    {position.symbol}: {position.quantity} shares @ {position.averagePrice}"
         for position in account.positions
     ]
     order_lines = [
         f"    #{order.orderId} {type(order.side).__name__.rsplit('_', 1)[-1].lower()} "
-        f"{order.quantity} {order.symbol} ({type(order.status).__name__.rsplit('_', 1)[-1].lower()})"
+        f"{order.quantity} {order.symbol} {order_type(order)} "
+        f"({type(order.status).__name__.rsplit('_', 1)[-1].lower()})"
         for order in account.orders
     ]
     return "\n".join(
@@ -92,9 +110,10 @@ def DisplayAccount(account: Any) -> str:
 
 
 def DisplayLedger(ledger: Any) -> str:
+    """Format VQC ledger entries for diagnostics."""
     lines = ["Ledger"]
     for entry in ledger:
-        entry_id = getattr(entry, "id_", "unknown")
+        entry_id = getattr(entry, "ledgerId", "unknown")
         if getattr(entry, "is_Opening", False):
             lines.append(
                 f"  #{entry_id} Opening: cash={entry.cash}, "
@@ -115,4 +134,4 @@ def DisplayLedger(ledger: Any) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["VQCUtility", "Logger", "ReportException", "DisplayAccount", "DisplayLedger"]
+__all__ = ["Logger", "ReportException", "DisplayAccount", "DisplayLedger"]

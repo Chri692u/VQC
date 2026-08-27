@@ -59,18 +59,18 @@ module Currency {
     }
 
     // Sums a sequence of money values.
-    function Sum(moneys: seq<Money>): Money
-        decreases |moneys|
+    function Sum(values: seq<Money>): Money
+        decreases |values|
     {
-        if |moneys| == 0 then
+        if |values| == 0 then
             Money(0)
         else
-            Add(moneys[0], Sum(moneys[1..]))
+            Add(values[0], Sum(values[1..]))
     }
 
     // Computes notional value as quantity times unit price.
-    function Cost(qty: nat, price: Money): Money
+    function Cost(quantity: nat, price: Money): Money
     {
-        Money(qty as int * price.value)
+        Money(quantity as int * price.value)
     }
 }
