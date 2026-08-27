@@ -142,5 +142,9 @@ their values.
 shared utility class and its mapping/ID helpers are private implementation
 details and are intentionally absent from `__all__`.
 
+## Getting started
+Start with `examples/TUTORIAL.md` for a guided introduction to the verified core,
+paper-account setup, order types, signed quantities, and common errors.
+
 `examples/IntervalBuy.py` demonstrates regular-session market orders and
 extended-hours limit orders derived from a usable ask quote.
