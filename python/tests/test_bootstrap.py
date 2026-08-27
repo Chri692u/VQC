@@ -28,8 +28,27 @@ class SnapshotBroker:
             )
         ]
 
+    def get_clock(self):
+        return SimpleNamespace(is_open=False)
+
+    def submit_order(self, order_data):
+        raise AssertionError("closed-market orders must not reach the broker")
+
 
 class BootstrapTests(unittest.TestCase):
+    def test_client_does_not_submit_when_market_is_closed(self):
+        client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
+
+        with self.assertRaisesRegex(RuntimeError, "Market is closed"):
+            client.Buy("GLD", 1)
+
+    def test_client_owns_state_synchronized_by_daemon(self):
+        client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
+
+        self.assertEqual(client.account.cash, VQC.Money.FromDecimal("1000"))
+        self.assertEqual(client.daemon.order_ids, {"broker-order-1": 1})
+        self.assertTrue(VQC.IsValidAccount(client.account))
+
     def test_bootstrap_preserves_the_broker_snapshot(self):
         cash = VQC.Money.FromDecimal("-25.50")
         position = VQC.Position("GLD", 2, VQC.Money.FromDecimal("10"))
@@ -66,7 +85,7 @@ class BootstrapTests(unittest.TestCase):
             ),
         )
 
-        client.HandleTradeUpdate(update)
+        client.daemon.HandleTradeUpdate(update)
 
         self.assertEqual(client.account.orders[0].filledQuantity, 1)
         self.assertTrue(client.account.orders[0].status.is_PartiallyFilled)
@@ -88,7 +107,7 @@ class BootstrapTests(unittest.TestCase):
             ),
         )
 
-        client.HandleTradeUpdate(update)
+        client.daemon.HandleTradeUpdate(update)
 
         self.assertEqual(len(client.account.orders), 1)
         self.assertTrue(VQC.IsValidAccount(client.account))
@@ -107,7 +126,7 @@ class BootstrapTests(unittest.TestCase):
             ),
         )
 
-        client.HandleTradeUpdate(update)
+        client.daemon.HandleTradeUpdate(update)
 
         self.assertTrue(client.account.orders[0].status.is_Cancelled)
         self.assertTrue(VQC.IsValidAccount(client.account))

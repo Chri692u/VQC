@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from vqc_diagnostics import Logger
+from vqc_utility import Logger
 
 
 class LoggerTests(unittest.TestCase):

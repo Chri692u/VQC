@@ -1,6 +1,6 @@
 import unittest
 
-from vqc_diagnostics import ReportException
+from vqc_utility import ReportException
 from vqc import HaltException, VQC
 
 
