@@ -4,25 +4,22 @@ VQC is a Dafny-verified financial state-transition core for cash, orders, fills,
 positions, and ledger history. It bootstraps a trusted account snapshot and then
 applies verified deposit, withdrawal, order, status, and fill transitions.
 
-## What VQC promises
+## Dafny correctness guarantees
 
-For every accepted core operation, Dafny proves that the resulting account
-remains structurally valid. In particular, VQC maintains:
+VQC provides two central correctness guarantees. First, `Bootstrap` proves that a trusted broker snapshot satisfying VQC's input requirements produces a valid account. Second, every verified account transition proves that, given a valid account, the resulting account remains valid. Together, these proofs establish account validity at bootstrap and preserve it through all subsequent accepted core operations.
 
-- valid and uniquely identified orders;
-- valid market, limit, stop, and stop-limit instructions;
-- compatible order-status transitions and bounded fill quantities;
-- active, long-only positions with unique symbols;
-- sells that cannot exceed the verified position quantity;
-- a valid ledger with unique IDs and any opening entry restricted to its start;
-- immutable transitions—a new account is returned instead of mutating the old
-  one.
+In particular, account validity guarantees:
 
-VQC does not promise that broker data or market quotes are truthful, that a
-network or stream is reliable, that an order will execute, or that a strategy
-will make money. Those are outside the verified model. `Bootstrap` therefore
-treats its broker snapshot as trusted input, while still requiring it to satisfy
-VQC's structural rules.
+* valid and uniquely identified orders;
+* valid market, limit, stop, and stop-limit instructions;
+* compatible order-status transitions and bounded fill quantities;
+* active, long-only positions with unique symbols;
+* sells that cannot exceed the verified position quantity;
+* a valid ledger with unique IDs and any opening entry restricted to its start;
+* immutable transitions—a new account is returned instead of mutating the old one.
+
+These guarantees apply only to the verified state and transitions modeled by VQC. VQC does not prove that broker data or market quotes are truthful, that a network or stream is reliable, that an order will execute, or that a strategy will make money. These properties are outside the verified model. `Bootstrap` therefore treats its broker snapshot as trusted input, while requiring that snapshot to satisfy VQC's structural rules before establishing the initial valid account.
+
 
 ## Python client and adapters
 
