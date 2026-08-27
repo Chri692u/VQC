@@ -2,10 +2,11 @@
 
 ```python
 from vqc import VQC
-from vqc_broker_adapter import BrokerAdapter
+from bindings.alpaca_adapter import AlpacaAdapter
+from bindings.broker_adapter import BrokerAdapter
 from vqc_client import VQCClient
-from vqc_diagnostics import DisplayAccount, DisplayLedger, Logger, ReportException
-from vqc_utility import VQCUtility
+from vqc_daemon import VQCDaemon
+from vqc_utility import DisplayAccount, DisplayLedger, Logger, ReportException, VQCUtility
 ```
 
 The runtime implementation uses Python and Alpaca. All account calls return a new account; they do not mutate the input account.
@@ -79,7 +80,7 @@ verification details; Python continues to use the account calls above.
 
 ## Alpaca client and adapters
 
-`VQCClient` is the Python broker boundary:
+`VQCClient` is the small Python order-submission boundary:
 
 ```python
 from vqc_client import VQCClient
@@ -88,17 +89,25 @@ client = VQCClient()
 client.Buy("GLD", 1)
 ```
 
-On construction it bootstraps VQC from Alpaca cash, positions, and open orders.
-`Buy`, `Sell`, and `SubmitOrder` submit broker orders; broker `partial_fill` and
-`fill` events call `VQC.Update`. Other broker lifecycle events call
-`VQC.SetOrderStatus`.
+On construction it creates a `VQCDaemon`. The client owns the broker, logger,
+verified account, and state lock and hands its context to the daemon. The daemon
+owns broker/VQC ID mappings, snapshot refreshes, and the trade-update stream.
+`Buy`, `Sell`, and `SubmitOrder` are therefore limited to submitting orders and
+handing successful results to the daemon. The current verified account remains
+available as `client.account`.
 
-`SyncAccountFromBroker()` performs the same trusted snapshot bootstrap again.
+Before submission, the client checks Alpaca's market clock and rejects the order
+locally when the regular session is closed. This prevents market orders from being
+queued for a later session.
+
+`VQCDaemon.SyncAccountFromBroker()` performs the trusted snapshot bootstrap again.
 It is used when an untracked broker event arrives: VQC refreshes to Alpaca's
 current state rather than guessing how to apply an unknown fill. This starts a
 new local ledger snapshot; it does not preserve a continuous VQC trade history.
 
-`BrokerAdapter` performs the conversion from Alpaca values to VQC records:
+`BrokerAdapter` is the structural contract for an isolated broker integration.
+`AlpacaAdapter` implements that contract and performs the conversion from Alpaca
+values to VQC records:
 
 - prices, cash, and average prices become scaled `VQC.Money` values;
 - timestamps become Unix seconds;
@@ -106,11 +115,16 @@ new local ledger snapshot; it does not preserve a continuous VQC trade history.
 - Alpaca positions become long-only VQC positions; a short position raises an
   error because VQC positions cannot have negative quantity;
 - Alpaca orders and fills become `VQC.Order` and `VQC.Fill` records using the
-  VQC numeric IDs assigned by the client.
+  VQC numeric IDs assigned by the daemon.
+
+Pass another adapter and its broker to `VQCClient(adapter=..., broker=...)` to use
+a different integration. Each client owns its adapter instance, so implementations
+do not share mappings or broker-specific state. The daemon and client contain no
+Alpaca request, stream, or conversion logic.
 
 ## Diagnostics
 
-`Logger(mute=False)` in `vqc_diagnostics` prints tagged messages such as
+`Logger(mute=False)` in `vqc_utility` prints tagged messages such as
 `[VQC][Client] ...`. Pass `Logger(mute=True)` to `VQCClient(logger=...)` to
 suppress client output. `DisplayAccount(account)`, `DisplayLedger(ledger)`, and
 `ReportException(error)` return readable strings for logging or printing.
