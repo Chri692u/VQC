@@ -78,7 +78,9 @@ print(account.cash)  # 1000
 ```
 
 Do not reuse a ledger ID. Deposits, withdrawals, and the opening snapshot each
-need a unique positive `ledger_id`.
+need a unique positive `ledger_id`. Python `Deposit` and `Withdraw` allocate the
+next ID when `ledger_id` is omitted; pass one explicitly only when an external
+system owns the identifier.
 
 Dafny proves that `NewAccount` is valid and that an accepted deposit preserves
 account validity. Its precondition requires a positive amount and a fresh,

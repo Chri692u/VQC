@@ -43,7 +43,7 @@ enter the verified API.
 | `VQC.Cost(quantity, price)` | Returns verified whole-quantity notional value. |
 | `VQC.Order(...)` | Creates a market, limit, stop, or stop-limit order. |
 | `VQC.Fill(execution_id, order_id, symbol, quantity, price, timestamp)` | Creates a priced execution. |
-| `VQC.Position(symbol, quantity, average_price)` | Creates a positive long position. |
+| `VQC.Position(symbol, quantity, average_price)` | Constructs a position record; validation is separate. |
 
 `VQC.Order` accepts `limit_price` and `stop_price`. Limit orders require the
 former, stop orders require the latter, and stop-limit orders require both.
@@ -54,8 +54,8 @@ former, stop orders require the latter, and stop-limit orders require both.
 | --- | --- |
 | `VQC.NewAccount()` | Returns an empty valid account. |
 | `VQC.Bootstrap(cash, positions, orders, ledger_id=1, timestamp=0)` | Creates the supplied snapshot and one matching opening entry. |
-| `VQC.Deposit(account, amount, ledger_id=1, timestamp=0)` | Adds positive cash and a deposit entry. |
-| `VQC.Withdraw(account, amount, ledger_id=1, timestamp=0)` | Removes positive cash and adds a withdrawal entry. |
+| `VQC.Deposit(account, amount, ledger_id=None, timestamp=0)` | Adds positive cash and a deposit entry, allocating the next ledger ID by default. |
+| `VQC.Withdraw(account, amount, ledger_id=None, timestamp=0)` | Removes positive cash and adds a withdrawal entry, allocating the next ledger ID by default. |
 | `VQC.PlaceOrder(account, order)` | Adds a valid order with a fresh order ID. |
 | `VQC.SetOrderStatus(account, order_id, new_status)` | Applies a valid non-fill lifecycle transition. |
 | `VQC.Update(account, fill)` | Applies a priced fill to the order, cash, position, and ledger. |
@@ -120,6 +120,14 @@ sell order.
 Order submission and background reconciliation share one private state lock.
 Applications should read `client.account` and use the public order methods, not
 access synchronization fields directly.
+
+Open sell orders reserve their remaining quantities against the verified long
+position, preventing aggregate sell exposure from opening an unsupported short.
+If the trade stream stops, the daemon refreshes the broker snapshot before
+retrying the stream. Failed snapshot requests use bounded exponential backoff,
+and event processing does not resume until bootstrap succeeds. A missed
+execution is therefore recovered as current
+snapshot state rather than reconstructed as an individual historical trade.
 
 ## Broker adapters
 

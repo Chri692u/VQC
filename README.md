@@ -25,7 +25,7 @@ trade ledger.
 
 These guarantees apply only to the verified state and transitions modeled by VQC. VQC does not prove that broker data or market quotes are truthful, that a network or stream is reliable, that an order will execute, or that a strategy will make money. These properties are outside the verified model. `Bootstrap` therefore treats its broker snapshot as trusted input, while requiring that snapshot to satisfy VQC's structural rules before establishing the initial valid account.
 
-Learn more about the [verified Dafny core](dafny/API_OVERVIEW.md) and the [Dafny language](https://dafny.org/).
+Learn more about the verified [Dafny core](dafny/API_OVERVIEW.md) and the [Dafny language](https://dafny.org/).
 
 ## Python client and adapters
 
