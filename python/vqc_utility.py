@@ -87,7 +87,8 @@ def DisplayAccount(account: Any) -> str:
         return "market"
 
     position_lines = [
-        f"    {position.symbol}: {position.quantity} shares @ {position.averagePrice}"
+        f"    {position.symbol}: "
+        f"{position.quantity} shares @ {position.averagePrice}"
         for position in account.positions
     ]
     order_lines = [

@@ -21,14 +21,15 @@ class _VQCDaemon:
     def __init__(self, client: Any) -> None:
         self._client = client
         self._order_ids: dict[str, int] = {}
-        self._fill_ids: dict[str, int] = {}
+        self._seen_execution_keys: set[str] = set()
+        self._next_execution_id = 1
         self._lifecycle = OrderLifecycle(client.logger)
         self._trade_stream_thread: Thread | None = None
         self._stream_error: Exception | None = None
         self._stop_event = Event()
 
     def _SyncAccountFromBroker(self) -> None:
-        adapter = self._client._adapter
+        adapter = self._client.broker_adapter
         broker = self._client.broker
         with self._client._state_lock:
             positions = [
@@ -60,7 +61,7 @@ class _VQCDaemon:
 
             # Cumulative fills in the synchronous response have no execution
             # price. Register a clean order and let stream fills apply economics.
-            order = self._client._adapter.ToVQCOrder(
+            order = self._client.broker_adapter.ToVQCOrder(
                 broker_order,
                 order_id,
                 filled_quantity=0,
@@ -69,10 +70,10 @@ class _VQCDaemon:
             self._client._account = self._lifecycle.Place(
                 self._client._account, order
             )
-            order_key = self._client._adapter.GetOrderKey(broker_order)
+            order_key = self._client.broker_adapter.GetOrderKey(broker_order)
             self._order_ids[order_key] = order_id
 
-        status = self._client._adapter.GetOrderStatus(broker_order)
+        status = self._client.broker_adapter.GetOrderStatus(broker_order)
         if status not in {
             OrderStatus.PENDING,
             OrderStatus.PARTIALLY_FILLED,
@@ -100,7 +101,7 @@ class _VQCDaemon:
 
     def _HandleTradeUpdate(self, update: Any) -> None:
         with self._client._state_lock:
-            adapter = self._client._adapter
+            adapter = self._client.broker_adapter
             broker_order = adapter.GetUpdateOrder(update)
             order_key = adapter.GetOrderKey(broker_order)
 
@@ -117,12 +118,12 @@ class _VQCDaemon:
                 return
 
             execution_key = adapter.GetExecutionKey(update)
-            if execution_key in self._fill_ids:
+            if execution_key in self._seen_execution_keys:
                 return
 
             fill = adapter.ToVQCFill(
                 update,
-                execution_id=max(self._fill_ids.values(), default=0) + 1,
+                execution_id=self._next_execution_id,
                 order_id=self._order_ids[order_key],
             )
             raw_event = adapter.GetUpdateEvent(update)
@@ -130,7 +131,8 @@ class _VQCDaemon:
             self._client._account = self._lifecycle.ApplyFill(
                 self._client._account, fill, event
             )
-            self._fill_ids[execution_key] = fill.executionId
+            self._seen_execution_keys.add(execution_key)
+            self._next_execution_id += 1
 
     async def _OnTradeUpdate(self, update: Any) -> None:
         self._HandleTradeUpdate(update)
@@ -138,9 +140,7 @@ class _VQCDaemon:
     def _RunTradeStream(self) -> None:
         while not self._stop_event.is_set():
             try:
-                self._client._adapter.RunTradeStream(
-                    self._client, self._OnTradeUpdate
-                )
+                self._client.broker_adapter.RunTradeStream(self._OnTradeUpdate)
                 if self._stop_event.is_set():
                     return
                 self._stream_error = RuntimeError("trade stream ended")
