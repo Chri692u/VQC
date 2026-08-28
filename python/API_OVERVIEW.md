@@ -28,7 +28,7 @@ Orders use broker-neutral enums:
 
 - `VQC.OrderSide`: `BUY`, `SELL`
 - `VQC.OrderType`: `MARKET`, `LIMIT`, `STOP`, `STOP_LIMIT`
-- `VQC.OrderStatus`: `NEW`, `ACCEPTED`, `PARTIALLY_FILLED`, `FILLED`,
+- `VQC.OrderStatus`: `PENDING`, `OPEN`, `PARTIALLY_FILLED`, `FILLED`,
   `CANCELLED`, `REJECTED`
 
 Broker-native strings are normalized inside the selected adapter and do not
@@ -62,8 +62,15 @@ former, stop orders require the latter, and stop-limit orders require both.
 
 Use `Update` only for actual executions. Cumulative filled quantity from an
 order-submission response is not treated as a fill because it has no incremental
-execution price. Use `SetOrderStatus` for acceptance, cancellation, rejection,
+execution price. Use `SetOrderStatus` for opening, cancellation, rejection,
 and other non-fill lifecycle events.
+
+The broker client normalizes non-fill events into a dedicated
+`bindings.vqc_lifecycle.LifecycleUpdate` and applies them through
+`OrderLifecycle`. That object owns order placement, non-fill status changes,
+priced fill application, and all associated lifecycle logging. The non-fill
+path rejects `PARTIALLY_FILLED` and `FILLED`; those statuses must result from
+the priced fill path so cash, positions, orders, and ledger remain atomic.
 
 Closing a long position removes it from `account.positions`; its order and trade
 ledger entries remain as history. Ledger entries expose `ledgerId`, while orders

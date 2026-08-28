@@ -155,13 +155,14 @@ For an accepted update, Dafny proves that order progress, cash, positions, and
 the appended trade-ledger entry remain structurally valid. A full sell removes
 the closed position while preserving its order and ledger history.
 
-Non-fill lifecycle changes use `SetOrderStatus`:
+Non-fill lifecycle changes use `SetOrderStatus`. `PENDING` means submitted but
+not active; `OPEN` means accepted and active at the broker:
 
 ```python
 account = VQC.SetOrderStatus(
     account,
     order_id=1,
-    new_status=VQC.OrderStatus.ACCEPTED,
+    new_status=VQC.OrderStatus.OPEN,
 )
 ```
 

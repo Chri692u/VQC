@@ -13,8 +13,8 @@ operations. It stores signed integer minor units; both `VQC.Money` bindings use
 a scale of 100, so `Money.FromDecimal("12.34")` becomes `Money(1234)` in Dafny.
 
 The core models `Market`, `Limit(limitPrice)`, `Stop(stopPrice)`, and
-`StopLimit(stopPrice, limitPrice)` orders. Lifecycle states are `New`,
-`Accepted`, `PartiallyFilled`, `Filled`, `Cancelled`, and `Rejected`.
+`StopLimit(stopPrice, limitPrice)` orders. Lifecycle states are `Pending`,
+`Open`, `PartiallyFilled`, `Filled`, `Cancelled`, and `Rejected`.
 
 | Dafny module | Function or method | External use |
 | --- | --- | --- |
@@ -35,6 +35,8 @@ those values and the supplied ID/timestamp.
 `Update` requires a priced `Fill`; an order response's cumulative filled
 quantity is not itself an execution. `SetOrderStatus` handles verified non-fill
 lifecycle transitions.
+The compatibility and transition graph is owned by the dedicated `OrderLifecycle`
+module rather than being duplicated across account and order operations.
 
 Internal preservation proofs are split by domain: `LedgerProof` proves fresh
 generated ledger IDs, `OrderProof` proves valid order replacement, and
