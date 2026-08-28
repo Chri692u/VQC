@@ -28,8 +28,8 @@ PositionRecord = Types.Position_Position
 class OrderStatus(Enum):
     """Broker-neutral lifecycle states supported by the verified core."""
 
-    NEW = "new"
-    ACCEPTED = "accepted"
+    PENDING = "pending"
+    OPEN = "open"
     PARTIALLY_FILLED = "partially_filled"
     FILLED = "filled"
     CANCELLED = "cancelled"
@@ -58,7 +58,7 @@ def Order(
     quantity: int,
     side: OrderSide = OrderSide.BUY,
     order_type: OrderType = OrderType.MARKET,
-    status: OrderStatus = OrderStatus.NEW,
+    status: OrderStatus = OrderStatus.PENDING,
     filled_quantity: int = 0,
     limit_price: Money | None = None,
     stop_price: Money | None = None,
@@ -120,10 +120,10 @@ def Position(symbol: str, quantity: int, average_price: Money) -> PositionRecord
 
 def _to_dafny_order_status(status: OrderStatus) -> Any:
     """Translate the public enum into its generated Dafny counterpart."""
-    if status is OrderStatus.NEW:
-        return Types.OrderStatus_New()
-    if status is OrderStatus.ACCEPTED:
-        return Types.OrderStatus_Accepted()
+    if status is OrderStatus.PENDING:
+        return Types.OrderStatus_Pending()
+    if status is OrderStatus.OPEN:
+        return Types.OrderStatus_Open()
     if status is OrderStatus.PARTIALLY_FILLED:
         return Types.OrderStatus_PartiallyFilled()
     if status is OrderStatus.FILLED:

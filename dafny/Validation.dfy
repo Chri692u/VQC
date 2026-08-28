@@ -1,7 +1,9 @@
 include "Types.dfy"
+include "Lifecycle.dfy"
 
 module Validation {
     import opened Types
+    import opened OrderLifecycle
 
     // Money checks.
     predicate IsZero(m: Money)
@@ -69,20 +71,9 @@ module Validation {
 
     // Status compatibility is a lifecycle rule. It is intentionally separate
     // from IsValidOrder, which describes a structurally well-formed snapshot.
-    predicate IsOrderStatusCompatible(status: OrderStatus, filledQuantity: nat, quantity: nat)
-    {
-        match status
-            case New => filledQuantity == 0
-            case Accepted => filledQuantity == 0
-            case PartiallyFilled => 0 < filledQuantity < quantity
-            case Filled => filledQuantity == quantity
-            case Cancelled => filledQuantity < quantity
-            case Rejected => filledQuantity == 0
-    }
-
     predicate HasValidOrderStatus(order: Order)
     {
-        IsOrderStatusCompatible(order.status, order.filledQuantity, order.quantity)
+        IsStatusCompatible(order.status, order.filledQuantity, order.quantity)
     }
 
     predicate HasRemainingQuantity(order: Order)
@@ -100,58 +91,34 @@ module Validation {
         order.filledQuantity == 0
     }
 
-    predicate CanAcceptFill(status: OrderStatus)
-    {
-        status == New || status == Accepted || status == PartiallyFilled
-    }
-
-    predicate CanTransition(fromStatus: OrderStatus, toStatus: OrderStatus)
-    {
-        fromStatus == toStatus ||
-        (match fromStatus
-            case New =>
-                toStatus == Accepted || toStatus == PartiallyFilled || toStatus == Filled || toStatus == Cancelled || toStatus == Rejected
-            case Accepted =>
-                toStatus == PartiallyFilled || toStatus == Filled || toStatus == Cancelled || toStatus == Rejected
-            case PartiallyFilled =>
-                toStatus == Filled || toStatus == Cancelled || toStatus == Rejected
-            case Filled =>
-                toStatus == Filled
-            case Cancelled =>
-                toStatus == Cancelled
-            case Rejected =>
-                toStatus == Rejected)
-    }
-
     // Lifecycle transition predicates. These group the semantic conditions
     // required by order operations without making them global validity rules.
     predicate CanSetOrderStatus(order: Order, newStatus: OrderStatus)
     {
         IsValidOrder(order) &&
-        CanTransition(order.status, newStatus) &&
-        IsOrderStatusCompatible(newStatus, order.filledQuantity, order.quantity)
+        OrderLifecycle.CanSetStatus(
+            order.status, order.filledQuantity, order.quantity, newStatus
+        )
     }
 
     predicate CanApplyFill(order: Order, fillQuantity: nat)
     {
         IsValidOrder(order) &&
-        CanAcceptFill(order.status) &&
-        fillQuantity > 0 &&
-        fillQuantity <= order.quantity - order.filledQuantity
+        OrderLifecycle.CanApplyFill(
+            order.status, order.filledQuantity, order.quantity, fillQuantity
+        )
     }
 
     predicate CanCancelOrder(order: Order)
     {
         IsValidOrder(order) &&
-        (order.status == New || order.status == Accepted || order.status == PartiallyFilled) &&
-        HasRemainingQuantity(order)
+        OrderLifecycle.CanCancel(order.status, order.filledQuantity, order.quantity)
     }
 
     predicate CanRejectOrder(order: Order)
     {
         IsValidOrder(order) &&
-        (order.status == New || order.status == Accepted) &&
-        IsUnfilled(order)
+        OrderLifecycle.CanReject(order.status, order.filledQuantity)
     }
 
     predicate IsValidOrder(order: Order)

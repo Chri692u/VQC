@@ -39,14 +39,14 @@ class DafnyRuntimeNegativeTests(unittest.TestCase):
 
     def test_invalid_order_raises_dafny_runtime_error(self):
         account = VQC.NewAccount()
-        invalid_order = VQC.Order(1, "GLD", 0, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0)
+        invalid_order = VQC.Order(1, "GLD", 0, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.PENDING, 0)
 
         with self.assertRaises(HaltException):
             VQC.PlaceOrder(account, invalid_order)
 
     def test_fill_larger_than_remaining_quantity_raises_dafny_runtime_error(self):
         account = VQC.Deposit(VQC.NewAccount(), 1000, 1, 0)
-        order = VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0)
+        order = VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.PENDING, 0)
         account = VQC.PlaceOrder(account, order)
         invalid_fill = VQC.Fill(1, 1, "GLD", 2, 100, 0)
 
@@ -56,12 +56,12 @@ class DafnyRuntimeNegativeTests(unittest.TestCase):
     def test_invalid_order_status_transition_raises_dafny_runtime_error(self):
         account = VQC.PlaceOrder(
             VQC.NewAccount(),
-            VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.NEW, 0),
+            VQC.Order(1, "GLD", 1, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.PENDING, 0),
         )
-        account = VQC.SetOrderStatus(account, 1, VQC.OrderStatus.ACCEPTED)
+        account = VQC.SetOrderStatus(account, 1, VQC.OrderStatus.OPEN)
 
         with self.assertRaises(HaltException):
-            VQC.SetOrderStatus(account, 1, VQC.OrderStatus.NEW)
+            VQC.SetOrderStatus(account, 1, VQC.OrderStatus.PENDING)
 
 
 if __name__ == "__main__":

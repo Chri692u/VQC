@@ -7,10 +7,11 @@ from enum import Enum
 from typing import Any, Awaitable, Callable, Protocol
 
 from bindings.vqc_types import OrderSide, OrderStatus, OrderType
+from .vqc_lifecycle import LifecycleUpdate
 
 
 class TradeUpdateKind(Enum):
-    """Normalized categories understood by the synchronization daemon."""
+    """The two broker-event categories understood by synchronization."""
 
     FILL = "fill"
     LIFECYCLE = "lifecycle"
@@ -81,6 +82,14 @@ class BrokerAdapter(Protocol):
 
     def GetUpdateOrder(self, update: Any) -> Any:
         """Return the native order embedded in a trade update."""
+        ...
+
+    def GetUpdateEvent(self, update: Any) -> Any:
+        """Return the broker-native event name from a trade update."""
+        ...
+
+    def ToLifecycleUpdate(self, update: Any) -> LifecycleUpdate:
+        """Normalize one non-fill broker event and its failure reason."""
         ...
 
     def GetExecutionKey(self, update: Any) -> str:

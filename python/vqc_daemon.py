@@ -6,6 +6,7 @@ from threading import Thread
 from typing import Any
 
 from bindings.broker_adapter import TradeUpdateKind
+from bindings.vqc_lifecycle import LifecycleUpdate, OrderLifecycle
 from bindings.vqc_types import OrderStatus
 from vqc import VQC
 from vqc_utility import VQCUtility
@@ -18,6 +19,7 @@ class _VQCDaemon:
         self._client = client
         self._order_ids: dict[str, int] = {}
         self._fill_ids: dict[str, int] = {}
+        self._lifecycle = OrderLifecycle(client.logger)
         self._trade_stream_thread: Thread | None = None
         self._stream_error: Exception | None = None
 
@@ -40,10 +42,13 @@ class _VQCDaemon:
                 positions,
                 orders,
             )
-            self._order_ids = {
-                adapter.GetOrderKey(order): order_id
-                for order_id, order in enumerate(broker_orders, start=1)
-            }
+            self._order_ids.clear()
+            self._order_ids.update(
+                {
+                    adapter.GetOrderKey(order): order_id
+                    for order_id, order in enumerate(broker_orders, start=1)
+                }
+            )
         self._client.logger.Log("Daemon", "Bootstrapped account from broker state.")
 
     def _TrackSubmittedOrder(self, broker_order: Any) -> None:
@@ -56,31 +61,38 @@ class _VQCDaemon:
                 broker_order,
                 order_id,
                 filled_quantity=0,
-                status=OrderStatus.NEW,
+                status=OrderStatus.PENDING,
             )
-            self._client._account = VQC.PlaceOrder(self._client._account, order)
+            self._client._account = self._lifecycle.Place(
+                self._client._account, order
+            )
             order_key = self._client._adapter.GetOrderKey(broker_order)
             self._order_ids[order_key] = order_id
 
         status = self._client._adapter.GetOrderStatus(broker_order)
         if status not in {
-            OrderStatus.NEW,
+            OrderStatus.PENDING,
             OrderStatus.PARTIALLY_FILLED,
             OrderStatus.FILLED,
         }:
-            self._SetOrderStatus(broker_order)
+            self._ApplyLifecycleUpdate(
+                LifecycleUpdate(
+                    order_key=order_key,
+                    status=status,
+                    event="submission",
+                )
+            )
 
-    def _SetOrderStatus(self, broker_order: Any) -> None:
+    def _ApplyLifecycleUpdate(self, update: LifecycleUpdate) -> None:
+        """Resolve, verify, apply, and report one lifecycle transition."""
         with self._client._state_lock:
-            order_key = self._client._adapter.GetOrderKey(broker_order)
-            order_id = self._order_ids[order_key]
-            status = self._client._adapter.GetOrderStatus(broker_order)
-            if status in {OrderStatus.PARTIALLY_FILLED, OrderStatus.FILLED}:
-                # Execution events alone carry the incremental fill price and
-                # quantity needed for a verified economic transition.
-                return
-            self._client._account = VQC.SetOrderStatus(
-                self._client._account, order_id, status
+            order_id = self._order_ids.get(update.order_key)
+            if order_id is None:
+                raise KeyError(
+                    f"untracked broker order {update.order_key!r} in lifecycle update"
+                )
+            self._client._account = self._lifecycle.ApplyStatus(
+                self._client._account, order_id, update
             )
 
     def _HandleTradeUpdate(self, update: Any) -> None:
@@ -98,7 +110,7 @@ class _VQCDaemon:
                 return
 
             if adapter.GetUpdateKind(update) is TradeUpdateKind.LIFECYCLE:
-                self._SetOrderStatus(broker_order)
+                self._ApplyLifecycleUpdate(adapter.ToLifecycleUpdate(update))
                 return
 
             execution_key = adapter.GetExecutionKey(update)
@@ -110,12 +122,12 @@ class _VQCDaemon:
                 execution_id=max(self._fill_ids.values(), default=0) + 1,
                 order_id=self._order_ids[order_key],
             )
-            self._client._account = VQC.Update(self._client._account, fill)
-            self._fill_ids[execution_key] = fill.executionId
-            self._client.logger.Log(
-                "Validation",
-                f"Applied fill for {fill.symbol} x {fill.quantity} at {fill.price}.",
+            raw_event = adapter.GetUpdateEvent(update)
+            event = str(getattr(raw_event, "value", raw_event)).lower()
+            self._client._account = self._lifecycle.ApplyFill(
+                self._client._account, fill, event
             )
+            self._fill_ids[execution_key] = fill.executionId
 
     async def _OnTradeUpdate(self, update: Any) -> None:
         self._HandleTradeUpdate(update)

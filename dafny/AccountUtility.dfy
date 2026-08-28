@@ -35,7 +35,7 @@ module AccountUtility {
         decreases |orders|
     {
         if |orders| == 0 then
-            Order(OrderId(0), "", 0, Buy, Market, New, 0)
+            Order(OrderId(0), "", 0, Buy, Market, Pending, 0)
         else if orders[0].orderId == orderId then
             orders[0]
         else

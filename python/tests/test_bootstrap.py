@@ -11,6 +11,7 @@ from alpaca.trading.requests import (
 )
 
 from bindings.alpaca_adapter import AlpacaAdapter
+from bindings.vqc_lifecycle import LifecycleUpdate
 from vqc import VQC
 from vqc_client import VQCClient
 
@@ -101,9 +102,10 @@ class OpenSellOrderBroker(SubmissionBroker):
 
 class BootstrapTests(unittest.TestCase):
     def test_alpaca_statuses_normalize_without_leaking_broker_enums(self):
-        self.assertIs(AlpacaAdapter._ToVQCStatus("pending_new"), VQC.OrderStatus.NEW)
+        self.assertIs(AlpacaAdapter._ToVQCStatus("pending_new"), VQC.OrderStatus.PENDING)
+        self.assertIs(AlpacaAdapter._ToVQCStatus("new"), VQC.OrderStatus.OPEN)
         self.assertIs(
-            AlpacaAdapter._ToVQCStatus("pending_cancel"), VQC.OrderStatus.ACCEPTED
+            AlpacaAdapter._ToVQCStatus("pending_cancel"), VQC.OrderStatus.OPEN
         )
         self.assertIs(
             AlpacaAdapter._ToVQCStatus("done_for_day"), VQC.OrderStatus.CANCELLED
@@ -216,7 +218,7 @@ class BootstrapTests(unittest.TestCase):
         result = client.MarketOrder("SLV", 2)
         submitted = client.account.orders[-1]
 
-        self.assertTrue(submitted.status.is_New)
+        self.assertTrue(submitted.status.is_Pending)
         self.assertEqual(submitted.filledQuantity, 0)
 
         client._daemon._HandleTradeUpdate(
@@ -249,7 +251,7 @@ class BootstrapTests(unittest.TestCase):
     def test_bootstrap_preserves_the_broker_snapshot(self):
         cash = VQC.Money.FromDecimal("-25.50")
         position = VQC.Position("GLD", 2, VQC.Money.FromDecimal("10"))
-        order = VQC.Order(1, "GLD", 2, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.ACCEPTED, 0)
+        order = VQC.Order(1, "GLD", 2, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.OPEN, 0)
 
         account = VQC.Bootstrap(cash, [position], [order], ledger_id=7, timestamp=9)
 
@@ -327,6 +329,38 @@ class BootstrapTests(unittest.TestCase):
 
         self.assertTrue(client.account.orders[0].status.is_Cancelled)
         self.assertTrue(VQC.IsValidAccount(client.account))
+
+    def test_client_applies_and_reports_a_rejection_reason(self):
+        client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
+        update = SimpleNamespace(
+            event="rejected",
+            reason="insufficient buying power",
+            order=SimpleNamespace(
+                id="broker-order-1",
+                symbol="GLD",
+                side="buy",
+                qty="2",
+                filled_qty="0",
+                status="rejected",
+            ),
+        )
+
+        client._daemon._HandleTradeUpdate(update)
+
+        self.assertTrue(client.account.orders[0].status.is_Rejected)
+        self.assertEqual(len(client.account.ledger), 1)
+        self.assertTrue(VQC.IsValidAccount(client.account))
+
+    def test_lifecycle_path_refuses_unpriced_fill_statuses(self):
+        client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
+        update = LifecycleUpdate(
+            order_key="broker-order-1",
+            status=VQC.OrderStatus.PARTIALLY_FILLED,
+            event="partial_fill",
+        )
+
+        with self.assertRaisesRegex(ValueError, "without execution economics"):
+            client._daemon._ApplyLifecycleUpdate(update)
 
 
 if __name__ == "__main__":

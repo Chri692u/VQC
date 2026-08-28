@@ -18,8 +18,8 @@ export type PositionRecord = { readonly [positionBrand]: "Position" };
 export type OrderSide = "buy" | "sell";
 export type OrderType = "market" | "limit" | "stop" | "stop_limit";
 export type OrderStatus =
-    | "new"
-    | "accepted"
+    | "pending"
+    | "open"
     | "partially_filled"
     | "filled"
     | "cancelled"
@@ -42,8 +42,8 @@ function toDafnyOrderSide(side: OrderSide): DafnyOrderSide {
 /** @internal Converts a public status to the generated Dafny status value. */
 export function toDafnyOrderStatus(status: OrderStatus): DafnyOrderStatus {
     switch (status) {
-        case "new": return Dafny.Types.OrderStatus.create_New() as DafnyOrderStatus;
-        case "accepted": return Dafny.Types.OrderStatus.create_Accepted() as DafnyOrderStatus;
+        case "pending": return Dafny.Types.OrderStatus.create_Pending() as DafnyOrderStatus;
+        case "open": return Dafny.Types.OrderStatus.create_Open() as DafnyOrderStatus;
         case "partially_filled": return Dafny.Types.OrderStatus.create_PartiallyFilled() as DafnyOrderStatus;
         case "filled": return Dafny.Types.OrderStatus.create_Filled() as DafnyOrderStatus;
         case "cancelled": return Dafny.Types.OrderStatus.create_Cancelled() as DafnyOrderStatus;
@@ -58,7 +58,7 @@ export function Order(
     quantity: IntegerInput,
     side: OrderSide = "buy",
     orderType: OrderType = "market",
-    status: OrderStatus = "new",
+    status: OrderStatus = "pending",
     filledQuantity: IntegerInput = 0,
     limitPrice?: Money,
     stopPrice?: Money,

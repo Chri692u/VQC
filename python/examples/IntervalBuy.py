@@ -73,7 +73,7 @@ def BuyGoldAndSilver(
         except Exception as error:
             logger.Log(
                 "Example",
-                f"Could not process {symbol}: {type(error).__name__}: {error}",
+                f"{type(error).__name__}: {error}",
             )
 
 

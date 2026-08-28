@@ -132,18 +132,6 @@ class VQCClient:
                 extended_hours,
             )
             self._daemon._TrackSubmittedOrder(result)
-            self.logger.Log(
-                "Validation",
-                f"Submitted {order_type.value} {side.value} order for "
-                f"{symbol.strip().upper()} x {absolute_quantity}.",
-            )
-            status = self._adapter.GetOrderStatus(result)
-            if status not in {
-                OrderStatus.NEW,
-                OrderStatus.PARTIALLY_FILLED,
-                OrderStatus.FILLED,
-            }:
-                self.logger.Log("Validation", f"Order status is {status.value}.")
             return result
 
     def MarketOrder(self, symbol: str, quantity: int) -> Any:
@@ -208,8 +196,8 @@ class VQCClient:
                 if order.symbol == normalized_symbol
                 and order.side.is_Sell
                 and (
-                    order.status.is_New
-                    or order.status.is_Accepted
+                    order.status.is_Pending
+                    or order.status.is_Open
                     or order.status.is_PartiallyFilled
                 )
             ]

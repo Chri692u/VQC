@@ -10,6 +10,7 @@ from .vqc_account import (
     Withdraw,
 )
 from .vqc_currency import Cost, Money, Sum
+from .vqc_lifecycle import LifecycleUpdate, OrderLifecycle
 from .vqc_types import (
     Account,
     Fill,
@@ -34,7 +35,9 @@ __all__ = [
     "Money",
     "Account",
     "Ledger",
+    "LifecycleUpdate",
     "OrderRecord",
+    "OrderLifecycle",
     "OrderSide",
     "OrderStatus",
     "OrderType",

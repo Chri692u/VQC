@@ -14,7 +14,7 @@ module Types {
         | Limit(limitPrice: Money)
         | Stop(stopPrice: Money)
         | StopLimit(stopPrice: Money, limitPrice: Money)
-    datatype OrderStatus = New | Accepted | PartiallyFilled | Filled | Cancelled | Rejected
+    datatype OrderStatus = Pending | Open | PartiallyFilled | Filled | Cancelled | Rejected
 
     // Order representation.
     datatype Order = Order(

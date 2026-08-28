@@ -25,6 +25,7 @@ from bindings.broker_adapter import PriceInput, TradeUpdateKind
 from bindings.vqc_types import OrderSide as VQCOrderSide
 from bindings.vqc_types import OrderStatus, OrderType as VQCOrderType
 from vqc_utility import VQCUtility
+from bindings.vqc_lifecycle import LifecycleUpdate
 
 
 class AlpacaAdapter:
@@ -61,9 +62,10 @@ class AlpacaAdapter:
     @staticmethod
     def _ToVQCStatus(status: Any) -> OrderStatus:
         status = str(getattr(status, "value", status)).lower()
-        if status in {"new", "pending_new", "pending_review"}:
-            return OrderStatus.NEW
+        if status in {"pending_new", "pending_review"}:
+            return OrderStatus.PENDING
         if status in {
+            "new",
             "accepted",
             "accepted_for_bidding",
             "pending_cancel",
@@ -72,7 +74,7 @@ class AlpacaAdapter:
             "stopped",
             "suspended",
         }:
-            return OrderStatus.ACCEPTED
+            return OrderStatus.OPEN
         if status in {"partially_filled", "partial_fill"}:
             return OrderStatus.PARTIALLY_FILLED
         if status == "filled":
@@ -128,7 +130,7 @@ class AlpacaAdapter:
         )
         if filled == quantity:
             order_status = OrderStatus.FILLED
-        elif filled > 0 and order_status in {OrderStatus.NEW, OrderStatus.ACCEPTED}:
+        elif filled > 0 and order_status in {OrderStatus.PENDING, OrderStatus.OPEN}:
             order_status = OrderStatus.PARTIALLY_FILLED
         raw_order_type = VQCUtility.RequireField(order, "type", "broker order")
         order_type_value = getattr(raw_order_type, "value", raw_order_type)
@@ -264,7 +266,7 @@ class AlpacaAdapter:
         )
         if filled == quantity:
             return OrderStatus.FILLED
-        if filled > 0 and status in {OrderStatus.NEW, OrderStatus.ACCEPTED}:
+        if filled > 0 and status in {OrderStatus.PENDING, OrderStatus.OPEN}:
             return OrderStatus.PARTIALLY_FILLED
         return status
 
@@ -281,6 +283,41 @@ class AlpacaAdapter:
     def GetUpdateOrder(self, update: Any) -> Any:
         """Return the order embedded in an Alpaca trade update."""
         return VQCUtility.RequireField(update, "order", "trade update")
+
+    def GetUpdateEvent(self, update: Any) -> Any:
+        """Return the Alpaca trade-update event name."""
+        return VQCUtility.RequireField(update, "event", "trade update")
+
+    def ToLifecycleUpdate(self, update: Any) -> LifecycleUpdate:
+        """Normalize an Alpaca non-fill event, retaining diagnostic context."""
+        broker_order = self.GetUpdateOrder(update)
+        raw_event = self.GetUpdateEvent(update)
+        event = str(getattr(raw_event, "value", raw_event)).lower()
+        status = (
+            OrderStatus.PENDING
+            if event in {"pending_new", "pending_review"}
+            else OrderStatus.OPEN
+            if event in {"new", "accepted", "accepted_for_bidding"}
+            else self.GetOrderStatus(broker_order)
+        )
+        reason = next(
+            (
+                str(value)
+                for value in (
+                    VQCUtility.GetField(update, "reason"),
+                    VQCUtility.GetField(update, "message"),
+                    VQCUtility.GetField(broker_order, "reject_reason"),
+                )
+                if value
+            ),
+            None,
+        )
+        return LifecycleUpdate(
+            order_key=self.GetOrderKey(broker_order),
+            status=status,
+            event=event,
+            reason=reason,
+        )
 
     def GetExecutionKey(self, update: Any) -> str:
         """Return Alpaca's execution UUID for fill deduplication."""
