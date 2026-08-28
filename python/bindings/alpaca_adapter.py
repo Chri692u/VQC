@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
 from alpaca.trading.requests import (
@@ -21,7 +21,11 @@ from alpaca.trading.requests import (
 from alpaca.trading.stream import TradingStream
 
 from vqc import VQC
-from bindings.broker_adapter import PriceInput, TradeUpdateKind
+from bindings.broker_adapter import (
+    OrderTimeInForce,
+    PriceInput,
+    TradeUpdateKind,
+)
 from bindings.vqc_types import OrderSide as VQCOrderSide
 from bindings.vqc_types import OrderStatus, OrderType as VQCOrderType
 from vqc_utility import VQCUtility
@@ -29,7 +33,13 @@ from bindings.vqc_lifecycle import LifecycleUpdate
 
 
 class AlpacaAdapter:
-    """Stateless Alpaca-to-VQC conversion functions."""
+    """Alpaca conversion and connection state for one VQC client."""
+
+    def __init__(self) -> None:
+        self._api_key: str | None = None
+        self._secret_key: str | None = None
+        self._url_override: str | None = None
+        self._paper = True
 
     @staticmethod
     def _ToVQCTimestamp(value: Any) -> int:
@@ -150,7 +160,9 @@ class AlpacaAdapter:
         )
 
     @staticmethod
-    def ToVQCFill(update: Any, execution_id: int, order_id: int) -> Any:
+    def ToVQCFill(
+        update: Any, execution_id: int, order_id: int,
+    ) -> Any:
         """Convert one priced Alpaca execution update into a VQC fill."""
         broker_order = VQCUtility.RequireField(update, "order", "trade update")
         return VQC.Fill(
@@ -168,26 +180,31 @@ class AlpacaAdapter:
             ),
         )
 
-    def MakeBroker(self, client: Any) -> TradingClient:
-        """Create an Alpaca trading client from VQC configuration or environment."""
-        load_dotenv("KEYS.env")
-        client._api_key = client._api_key or os.getenv("ALPACA_API_KEY")
-        client._secret_key = client._secret_key or os.getenv("ALPACA_SECRET_KEY")
-        client._url_override = (
-            client._url_override or os.getenv("ALPACA_BASE_URL") or os.getenv("ALPACA_URL")
+    def MakeBroker(self, env_path: Path, paper: bool) -> TradingClient:
+        """Create an Alpaca trading client from one environment file."""
+        env_path = Path(env_path)
+        if not env_path.is_file():
+            raise FileNotFoundError(f"environment file not found: {env_path}")
+        configuration = dotenv_values(env_path)
+        self._api_key = configuration.get("ALPACA_API_KEY")
+        self._secret_key = configuration.get("ALPACA_SECRET_KEY")
+        self._url_override = configuration.get(
+            "ALPACA_BASE_URL"
+        ) or configuration.get("ALPACA_URL")
+        self._paper = paper
+        if not self._api_key or not self._secret_key:
+            raise RuntimeError(f"missing Alpaca credentials in {env_path}")
+        broker = TradingClient(
+            self._api_key,
+            self._secret_key,
+            paper=self._paper,
+            url_override=self._url_override,
         )
-        if not client._api_key or not client._secret_key:
-            raise RuntimeError("Missing Alpaca credentials in KEYS.env")
-        return TradingClient(
-            client._api_key,
-            client._secret_key,
-            paper=client._paper,
-            url_override=client._url_override,
-        )
+        return broker
 
-    def CanStream(self, client: Any) -> bool:
+    def CanStream(self) -> bool:
         """Return whether Alpaca streaming credentials are available."""
-        return bool(client._api_key and client._secret_key)
+        return bool(self._api_key and self._secret_key)
 
     def IsMarketOpen(self, broker: Any) -> bool:
         """Return Alpaca's regular-session clock state."""
@@ -203,15 +220,18 @@ class AlpacaAdapter:
         limit_price: PriceInput | None,
         stop_price: PriceInput | None,
         extended_hours: bool,
+        time_in_force: OrderTimeInForce,
     ) -> Any:
         """Build and submit one of VQC's four supported Alpaca order types."""
         if extended_hours and order_type is not VQCOrderType.LIMIT:
             raise ValueError("extended-hours orders must be limit orders")
+        if extended_hours and time_in_force is not OrderTimeInForce.DAY:
+            raise ValueError("extended-hours orders require DAY time in force")
         arguments = dict(
             symbol=symbol,
             qty=quantity,
             side=OrderSide.BUY if side is VQCOrderSide.BUY else OrderSide.SELL,
-            time_in_force=TimeInForce.DAY,
+            time_in_force=TimeInForce(time_in_force.value),
             client_order_id=str(uuid4()),
             extended_hours=extended_hours,
         )
@@ -244,8 +264,16 @@ class AlpacaAdapter:
         return broker.get_all_positions()
 
     def GetOpenOrders(self, broker: Any) -> list[Any]:
-        """Return up to Alpaca's 500 open-order response limit."""
-        return broker.get_orders(filter=GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=500))
+        """Return open orders, refusing a potentially truncated snapshot."""
+        orders = broker.get_orders(
+            filter=GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=500)
+        )
+        if len(orders) == 500:
+            raise RuntimeError(
+                "Alpaca returned the 500-order snapshot limit; refusing a "
+                "potentially incomplete VQC bootstrap"
+            )
+        return orders
 
     def GetOrderKey(self, order: Any) -> str:
         """Return Alpaca's UUID order identifier as text."""
@@ -326,13 +354,13 @@ class AlpacaAdapter:
             raise ValueError("fill update is missing its execution ID")
         return str(execution_id)
 
-    def RunTradeStream(self, client: Any, callback: Any) -> None:
+    def RunTradeStream(self, callback: Any) -> None:
         """Run Alpaca's account trade-update WebSocket until it stops."""
         stream = TradingStream(
-            client._api_key,
-            client._secret_key,
-            paper=client._paper,
-            url_override=client._url_override,
+            self._api_key,
+            self._secret_key,
+            paper=self._paper,
+            url_override=self._url_override,
         )
         stream.subscribe_trade_updates(callback)
         stream.run()

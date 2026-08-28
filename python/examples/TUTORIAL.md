@@ -204,10 +204,11 @@ ALPACA_SECRET_KEY=your-paper-secret
 Then create the client:
 
 ```python
+from bindings.alpaca_adapter import AlpacaAdapter
 from vqc_client import VQCClient
+from vqc_utility import Logger
 
-client = VQCClient(paper=True)
-
+client = VQCClient("KEYS.env", AlpacaAdapter(), Logger(), paper=True)
 print(client.MarketIsOpen())
 print(client.account.cash)
 ```
@@ -229,13 +230,13 @@ All four client order methods use the same rule:
 - zero and fractional quantities are rejected.
 
 ```python
-client.MarketOrder("GLD", 1)     # buy one share
-client.MarketOrder("GLD", -1)    # sell one share
+client.MarketOrder(gld, 1)     # buy one share
+client.MarketOrder(gld, -1)    # sell one share
 
-client.LimitOrder("GLD", 1, limit_price="420.00")
-client.StopOrder("GLD", -1, stop_price="400.00")
+client.LimitOrder(gld, 1, limit_price="420.00")
+client.StopOrder(gld, -1, stop_price="400.00")
 client.StopLimitOrder(
-    "GLD",
+    gld,
     -1,
     stop_price="400.00",
     limit_price="399.00",
@@ -265,19 +266,19 @@ sessions have different liquidity and order rules. The exact sessions,
 supported assets, order types, and time-in-force values are nevertheless broker
 specific.
 
-VQC deliberately rejects a normal client order locally when the configured
-broker says its regular market is closed:
+`MarketIsOpen` is an informational query. A strategy can decide whether to queue
+an ordinary order for the next session:
 
 ```python
-if client.MarketIsOpen():
-    client.MarketOrder("GLD", 1)
+if client.MarketIsOpen() or queue_for_next_session:
+    client.MarketOrder(gld, 1)
 ```
 
 For an extended-hours request, VQC requires a limit order:
 
 ```python
 client.LimitOrder(
-    "GLD",
+    gld,
     1,
     limit_price="425.00",
     extended_hours=True,
@@ -285,8 +286,9 @@ client.LimitOrder(
 ```
 
 This matches the included Alpaca adapter: Alpaca accepts extended-hours equity
-orders only as limit orders with a supported time in force; VQC currently sends
-`DAY`. Requiring a limit is also common at other brokers because thin
+orders only as limit orders with a supported time in force. `DAY` is the default;
+callers can choose another `OrderTimeInForce` for compatible regular-session
+orders. Requiring a limit is also common at other brokers because thin
 extended-hours liquidity makes an unbounded market order risky, but another
 broker may have different rules.
 
@@ -294,10 +296,10 @@ The flag means the order is eligible outside the regular session. It does not
 guarantee a fill. Your strategy must obtain a current quote and choose its own
 acceptable limit; VQC does not invent a price when market data is missing.
 
-Some brokers allow a regular-hours order submitted after closing to queue for
-the next session. VQC intentionally does not do that: without
-`extended_hours=True`, it fails immediately so a strategy cannot accidentally
-leave an order waiting overnight.
+Some brokers allow an ordinary order submitted after closing to queue for the
+next session. VQC leaves that decision to the caller and broker. Setting
+`extended_hours=True` instead requests eligibility during the extended session;
+it is not merely permission to queue.
 
 Market-clock and extended-hours decisions are intentionally outside Dafny: they
 depend on live broker rules and data. Dafny verifies the resulting order and
@@ -306,12 +308,12 @@ state transition, not whether the exchange will accept or execute it.
 ## 9. Liquidate a position
 
 ```python
-client.Liquidate("GLD")
+client.Liquidate(gld)
 ```
 
 This submits a market sell for the full verified long position. It fails if the
-position does not exist or already has an open sell order. Because it is a market
-order, it also requires the regular market to be open.
+position does not exist or if outstanding sell orders have already reserved any
+of its quantity. The broker decides when the market order is eligible to execute.
 
 The Python guard prevents overlapping liquidation requests. If a sell fill is
 later applied, Dafny independently requires that its quantity cannot exceed the
@@ -325,7 +327,7 @@ from vqc_utility import Logger, ReportException
 logger = Logger()
 
 try:
-    client.MarketOrder("GLD", 0)
+    client.MarketOrder(gld, 0)
 except VQC.HaltException as error:
     logger.Log("Strategy", ReportException(error))
 except (TypeError, ValueError, RuntimeError) as error:

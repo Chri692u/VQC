@@ -14,7 +14,23 @@ from alpaca.trading.requests import (
 from bindings.alpaca_adapter import AlpacaAdapter
 from bindings.vqc_lifecycle import LifecycleUpdate
 from vqc import VQC
-from vqc_client import VQCClient
+from vqc_client import OrderTimeInForce, VQCClient as _VQCClient
+from vqc_utility import Logger
+
+GLD = "GLD"
+SLV = "SLV"
+AAPL = "AAPL"
+
+
+def VQCClient(*, broker, start_trade_stream=True):
+    """Construct the explicit production client around a native test broker."""
+    return _VQCClient(
+        "unused-test.env",
+        AlpacaAdapter(),
+        Logger(),
+        start_trade_stream=start_trade_stream,
+        broker_client=broker,
+    )
 
 
 class SnapshotBroker:
@@ -43,7 +59,7 @@ class SnapshotBroker:
         return SimpleNamespace(is_open=False)
 
     def submit_order(self, order_data):
-        raise AssertionError("closed-market orders must not reach the broker")
+        raise AssertionError("this broker double does not accept submissions")
 
 
 class SubmissionBroker(SnapshotBroker):
@@ -110,6 +126,16 @@ class OpenSellOrderBroker(SubmissionBroker):
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_cross_border_identifier_and_broker_rejection_are_not_hidden(self):
+        broker = SubmissionBroker()
+        broker.submit_order = lambda order_data: (_ for _ in ()).throw(
+            RuntimeError(f"instrument {order_data.symbol} is not available")
+        )
+        client = VQCClient(broker=broker, start_trade_stream=False)
+
+        with self.assertRaisesRegex(RuntimeError, "SAP:XETR.*not available"):
+            client.MarketOrder("SAP:XETR", 1)
+
     def test_alpaca_statuses_normalize_without_leaking_broker_enums(self):
         self.assertIs(AlpacaAdapter._ToVQCStatus("pending_new"), VQC.OrderStatus.PENDING)
         self.assertIs(AlpacaAdapter._ToVQCStatus("new"), VQC.OrderStatus.OPEN)
@@ -123,12 +149,12 @@ class BootstrapTests(unittest.TestCase):
     def test_four_core_order_types_are_valid(self):
         price = VQC.Money.FromDecimal("10")
         orders = [
-            VQC.Order(1, "GLD", 1, order_type=VQC.OrderType.MARKET),
-            VQC.Order(2, "GLD", 1, order_type=VQC.OrderType.LIMIT, limit_price=price),
-            VQC.Order(3, "GLD", 1, order_type=VQC.OrderType.STOP, stop_price=price),
+            VQC.Order(1, GLD, 1, order_type=VQC.OrderType.MARKET),
+            VQC.Order(2, GLD, 1, order_type=VQC.OrderType.LIMIT, limit_price=price),
+            VQC.Order(3, GLD, 1, order_type=VQC.OrderType.STOP, stop_price=price),
             VQC.Order(
                 4,
-                "GLD",
+                GLD,
                 1,
                 order_type=VQC.OrderType.STOP_LIMIT,
                 stop_price=price,
@@ -146,10 +172,10 @@ class BootstrapTests(unittest.TestCase):
         broker = SubmissionBroker()
         client = VQCClient(broker=broker, start_trade_stream=False)
 
-        client.MarketOrder("GLD", 1)
-        client.LimitOrder("GLD", 1, 10)
-        client.StopOrder("GLD", 1, 9)
-        client.StopLimitOrder("GLD", 1, 9, 8)
+        client.MarketOrder(GLD, 1)
+        client.LimitOrder(GLD, 1, 10)
+        client.StopOrder(GLD, 1, 9)
+        client.StopLimitOrder(GLD, 1, 9, 8)
 
         self.assertEqual(
             [type(request) for request in broker.requests],
@@ -170,17 +196,50 @@ class BootstrapTests(unittest.TestCase):
         broker = ExtendedHoursBroker()
         client = VQCClient(broker=broker, start_trade_stream=False)
 
-        client.LimitOrder("GLD", 1, 10, extended_hours=True)
+        client.LimitOrder(GLD, 1, 10, extended_hours=True)
 
         self.assertTrue(broker.requests[0].extended_hours)
         with self.assertRaisesRegex(ValueError, "must be limit orders"):
             client._submit_order("GLD", 1, VQC.OrderType.MARKET, extended_hours=True)
 
+    def test_caller_controls_closed_market_submission_policy(self):
+        broker = ExtendedHoursBroker()
+        client = VQCClient(broker=broker, start_trade_stream=False)
+
+        client.MarketOrder(GLD, 1)
+
+        self.assertEqual(len(broker.requests), 1)
+        self.assertFalse(broker.requests[0].extended_hours)
+
+    def test_caller_can_choose_time_in_force(self):
+        broker = SubmissionBroker()
+        client = VQCClient(broker=broker, start_trade_stream=False)
+
+        client.LimitOrder(
+            GLD, 1, 10, time_in_force=OrderTimeInForce.GTC
+        )
+
+        self.assertEqual(broker.requests[0].time_in_force.value, "gtc")
+
+    def test_extended_hours_rejects_non_day_duration(self):
+        client = VQCClient(
+            broker=ExtendedHoursBroker(), start_trade_stream=False
+        )
+
+        with self.assertRaisesRegex(ValueError, "require DAY"):
+            client.LimitOrder(
+                GLD,
+                1,
+                10,
+                extended_hours=True,
+                time_in_force=OrderTimeInForce.GTC,
+            )
+
     def test_signed_market_orders_and_liquidation(self):
         broker = SubmissionBroker()
         client = VQCClient(broker=broker, start_trade_stream=False)
 
-        client.MarketOrder("GLD", -1)
+        client.MarketOrder(GLD, -1)
 
         self.assertEqual(broker.requests[0].side.value, "sell")
         self.assertEqual(broker.requests[0].qty, 1)
@@ -189,22 +248,22 @@ class BootstrapTests(unittest.TestCase):
         liquidation_client = VQCClient(
             broker=liquidation_broker, start_trade_stream=False
         )
-        liquidation_client.Liquidate("GLD")
+        liquidation_client.Liquidate(GLD)
         self.assertEqual(liquidation_broker.requests[0].side.value, "sell")
         self.assertEqual(liquidation_broker.requests[0].qty, 1)
         with self.assertRaisesRegex(ValueError, "cannot be zero"):
-            client.MarketOrder("GLD", 0)
+            client.MarketOrder(GLD, 0)
         with self.assertRaisesRegex(ValueError, "no open position"):
-            client.Liquidate("AAPL")
+            client.Liquidate(AAPL)
 
     def test_sell_orders_reserve_remaining_position_quantity(self):
         broker = SubmissionBroker()
         client = VQCClient(broker=broker, start_trade_stream=False)
 
-        client.LimitOrder("GLD", -1, 10)
+        client.LimitOrder(GLD, -1, 10)
 
         with self.assertRaisesRegex(ValueError, "only 0 shares are available"):
-            client.MarketOrder("GLD", -1)
+            client.MarketOrder(GLD, -1)
         self.assertEqual(len(broker.requests), 1)
 
     def test_sell_without_a_verified_position_is_rejected(self):
@@ -212,14 +271,14 @@ class BootstrapTests(unittest.TestCase):
         client = VQCClient(broker=broker, start_trade_stream=False)
 
         with self.assertRaisesRegex(ValueError, "only 0 shares are available"):
-            client.MarketOrder("SLV", -1)
+            client.MarketOrder(SLV, -1)
         self.assertEqual(broker.requests, [])
 
     def test_fractional_quantities_are_rejected_instead_of_truncated(self):
         client = VQCClient(broker=SubmissionBroker(), start_trade_stream=False)
 
         with self.assertRaisesRegex(TypeError, "whole number"):
-            client.MarketOrder("GLD", 1.5)
+            client.MarketOrder(GLD, 1.5)
         with self.assertRaisesRegex(ValueError, "whole number"):
             VQCClient(broker=FractionalPositionBroker(), start_trade_stream=False)
 
@@ -229,9 +288,9 @@ class BootstrapTests(unittest.TestCase):
 
         for invalid_price in (0, -1, float("nan"), float("inf")):
             with self.assertRaisesRegex(ValueError, "positive finite"):
-                client.LimitOrder("GLD", 1, invalid_price)
+                client.LimitOrder(GLD, 1, invalid_price)
         with self.assertRaisesRegex(TypeError, "positive finite"):
-            client.StopOrder("GLD", 1, True)
+            client.StopOrder(GLD, 1, True)
 
         self.assertEqual(broker.requests, [])
 
@@ -239,15 +298,15 @@ class BootstrapTests(unittest.TestCase):
         broker = OpenSellOrderBroker()
         client = VQCClient(broker=broker, start_trade_stream=False)
 
-        with self.assertRaisesRegex(RuntimeError, "open sell orders"):
-            client.Liquidate("GLD")
+        with self.assertRaisesRegex(ValueError, "only 0 shares are available"):
+            client.Liquidate(GLD)
         self.assertEqual(broker.requests, [])
 
     def test_submit_response_does_not_apply_unpriced_cumulative_fills(self):
         broker = ImmediatelyPartiallyFilledBroker()
         client = VQCClient(broker=broker, start_trade_stream=False)
 
-        result = client.MarketOrder("SLV", 2)
+        result = client.MarketOrder(SLV, 2)
         submitted = client.account.orders[-1]
 
         self.assertTrue(submitted.status.is_Pending)
@@ -267,11 +326,9 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(client.account.orders[-1].filledQuantity, 1)
         self.assertTrue(client.account.orders[-1].status.is_PartiallyFilled)
 
-    def test_client_does_not_submit_when_market_is_closed(self):
-        client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
-
-        with self.assertRaisesRegex(RuntimeError, "Market is closed"):
-            client.MarketOrder("GLD", 1)
+    def test_requested_unavailable_stream_is_not_silently_disabled(self):
+        with self.assertRaisesRegex(RuntimeError, "cannot stream"):
+            VQCClient(broker=SnapshotBroker())
 
     def test_client_owns_state_synchronized_by_daemon(self):
         client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)
@@ -282,8 +339,8 @@ class BootstrapTests(unittest.TestCase):
 
     def test_bootstrap_preserves_the_broker_snapshot(self):
         cash = VQC.Money.FromDecimal("-25.50")
-        position = VQC.Position("GLD", 2, VQC.Money.FromDecimal("10"))
-        order = VQC.Order(1, "GLD", 2, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.OPEN, 0)
+        position = VQC.Position(GLD, 2, VQC.Money.FromDecimal("10"))
+        order = VQC.Order(1, GLD, 2, VQC.OrderSide.BUY, VQC.OrderType.MARKET, VQC.OrderStatus.OPEN, 0)
 
         account = VQC.Bootstrap(cash, [position], [order], ledger_id=7, timestamp=9)
 
@@ -357,7 +414,7 @@ class BootstrapTests(unittest.TestCase):
             client._daemon._stop_event.set()
 
         with patch.object(
-            client._adapter, "RunTradeStream", side_effect=interrupted
+            client.broker_adapter, "RunTradeStream", side_effect=interrupted
         ):
             client._daemon._RunTradeStream()
 
@@ -391,7 +448,7 @@ class BootstrapTests(unittest.TestCase):
         broker.get_account = sometimes_failing_account
         with (
             patch.object(
-                client._adapter, "RunTradeStream", side_effect=interrupted
+                client.broker_adapter, "RunTradeStream", side_effect=interrupted
             ),
             patch.object(client._daemon._stop_event, "wait", return_value=False),
         ):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from enum import Enum
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Protocol
 
 from bindings.vqc_types import OrderSide, OrderStatus, OrderType
@@ -17,6 +18,17 @@ class TradeUpdateKind(Enum):
     LIFECYCLE = "lifecycle"
 
 
+class OrderTimeInForce(Enum):
+    """Broker-neutral order-duration choices supported by the client."""
+
+    DAY = "day"
+    GTC = "gtc"
+    OPG = "opg"
+    CLS = "cls"
+    IOC = "ioc"
+    FOK = "fok"
+
+
 TradeUpdateCallback = Callable[[Any], Awaitable[None]]
 PriceInput = Decimal | int | float | str
 
@@ -27,14 +39,15 @@ class BrokerAdapter(Protocol):
     Broker-native objects deliberately remain ``Any`` at this boundary. Each
     adapter converts them into the strongly constrained VQC records and enums.
     Implementations must not silently truncate quantities or invent missing
-    broker fields.
+    broker fields. They must reject broker account economics that cannot be
+    represented by VQC's scalar cash model; adapters never perform FX.
     """
 
-    def MakeBroker(self, client: Any) -> Any:
-        """Create the native broker client from VQC client configuration."""
+    def MakeBroker(self, env_path: Path, paper: bool) -> Any:
+        """Create the native broker client from explicit configuration."""
         ...
 
-    def CanStream(self, client: Any) -> bool:
+    def CanStream(self) -> bool:
         """Return whether the adapter has enough configuration to stream."""
         ...
 
@@ -52,6 +65,7 @@ class BrokerAdapter(Protocol):
         limit_price: PriceInput | None,
         stop_price: PriceInput | None,
         extended_hours: bool,
+        time_in_force: OrderTimeInForce,
     ) -> Any:
         """Submit one native broker order and return its broker record."""
         ...
@@ -97,7 +111,7 @@ class BrokerAdapter(Protocol):
         ...
 
     def ToVQCPosition(self, position: Any) -> Any:
-        """Convert one native position into a valid VQC position."""
+        """Normalize one broker position into VQC state."""
         ...
 
     def ToVQCOrder(
@@ -107,16 +121,24 @@ class BrokerAdapter(Protocol):
         filled_quantity: int | None = None,
         status: OrderStatus | None = None,
     ) -> Any:
-        """Convert one native order, allowing safe submission overrides."""
+        """Normalize one broker order into VQC state."""
         ...
 
-    def ToVQCFill(self, update: Any, execution_id: int, order_id: int) -> Any:
-        """Convert one native execution update into a valid VQC fill."""
+    def ToVQCFill(
+        self, update: Any, execution_id: int, order_id: int,
+    ) -> Any:
+        """Normalize one broker fill into VQC state."""
         ...
 
-    def RunTradeStream(self, client: Any, callback: TradeUpdateCallback) -> None:
+    def RunTradeStream(self, callback: TradeUpdateCallback) -> None:
         """Run the native event stream and invoke the async callback."""
         ...
 
 
-__all__ = ["BrokerAdapter", "PriceInput", "TradeUpdateCallback", "TradeUpdateKind"]
+__all__ = [
+    "BrokerAdapter",
+    "OrderTimeInForce",
+    "PriceInput",
+    "TradeUpdateCallback",
+    "TradeUpdateKind",
+]

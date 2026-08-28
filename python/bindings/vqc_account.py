@@ -67,7 +67,7 @@ def Withdraw(
 
 
 def PlaceOrder(account: Account, order: OrderRecord) -> Account:
-    """Return an account containing a new structurally valid order."""
+    """Return an account containing one fresh pending, unfilled order."""
     return AccountOps.PlaceOrder(account, order)
 
 

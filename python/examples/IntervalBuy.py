@@ -1,5 +1,4 @@
 from decimal import Decimal, InvalidOperation, ROUND_UP
-import os
 from pathlib import Path
 import sys
 import time
@@ -7,12 +6,13 @@ import time
 import schedule
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockLatestQuoteRequest
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vqc_client import VQCClient
 from vqc_utility import DisplayAccount, DisplayLedger, Logger
+from bindings.alpaca_adapter import AlpacaAdapter
 
 BUY_INTERVAL = 1
 BUY_INTERVAL_UNIT = "minutes"
@@ -21,7 +21,7 @@ LIMIT_BUFFER = Decimal("1.005")
 
 
 class MarketDataUnavailableError(RuntimeError):
-    """Raised when the strategy cannot derive a price from its market-data feed."""
+    """Raised when the strategy cannot derive a price from its selected feed."""
 
 
 def GetExtendedHoursLimit(data: StockHistoricalDataClient, symbol: str) -> Decimal:
@@ -32,19 +32,19 @@ def GetExtendedHoursLimit(data: StockHistoricalDataClient, symbol: str) -> Decim
     quote = quotes.get(symbol)
     if quote is None:
         raise MarketDataUnavailableError(
-            f"Alpaca's configured market-data feed returned no quote for {symbol}; "
+            f"The selected market-data feed returned no quote for {symbol}; "
             "no order was submitted."
         )
     try:
         ask = Decimal(str(quote.ask_price))
-    except InvalidOperation as error:
+    except (InvalidOperation, TypeError, ValueError) as error:
         raise MarketDataUnavailableError(
-            f"Alpaca's configured market-data feed returned invalid "
+            f"The selected market-data feed returned invalid "
             f"ask={quote.ask_price!r} for {symbol}; no order was submitted."
         ) from error
-    if ask <= 0:
+    if not ask.is_finite() or ask <= 0:
         raise MarketDataUnavailableError(
-            f"Alpaca's configured market-data feed returned ask={quote.ask_price!r} "
+            f"The selected market-data feed returned ask={quote.ask_price!r} "
             f"for {symbol}; no order was submitted."
         )
     return (ask * LIMIT_BUFFER).quantize(Decimal("0.01"), rounding=ROUND_UP)
@@ -78,12 +78,13 @@ def BuyGoldAndSilver(
 
 
 if __name__ == "__main__":
-    load_dotenv("KEYS.env")
+    environment_path = "KEYS.env"
+    configuration = dotenv_values(environment_path)
     logger = Logger()
-    client = VQCClient(logger=logger)
+    client = VQCClient(environment_path, AlpacaAdapter(), logger)
     data = StockHistoricalDataClient(
-        os.getenv("ALPACA_API_KEY"),
-        os.getenv("ALPACA_SECRET_KEY"),
+        configuration.get("ALPACA_API_KEY"),
+        configuration.get("ALPACA_SECRET_KEY"),
     )
 
     logger.Log("Example", DisplayAccount(client.account))
