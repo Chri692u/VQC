@@ -61,3 +61,5 @@ Positive quantities buy and negative quantities sell. `OrderTimeInForce` provide
 - `ReportException(error)` formats a VQC runtime error.
 
 See [examples/TUTORIAL.md](examples/TUTORIAL.md) for a guided example.
+`examples/MultiMarketBuy.py` submits one share from several Alpaca-supported
+US exchanges through a single VQC client.
