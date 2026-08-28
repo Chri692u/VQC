@@ -7,16 +7,19 @@
    that the current account agrees with its recorded history.
 4. **Decision on negative money** - settles whether cash/history consistency
    should permit margin-like negative cash before proving stronger semantics.
-5. **Short-position support in the Dafny core model** - extend position and
+5. **Fractional-share support** - introduce fixed-point integer quantities with
+   an explicit scale and rounding policy, then update cost, fill, position,
+   broker-adapter, and client semantics while preserving exact arithmetic.
+6. **Short-position support in the Dafny core model** - extend position and
    execution semantics to distinguish opening, increasing, reducing, and closing
    long and short exposure, with explicit rules for overselling and covering.
-6. **Order/history consistency proof** - connects lifecycle state and filled
+7. **Order/history consistency proof** - connects lifecycle state and filled
    quantity to the recorded order executions.
-7. **Cash/history consistency proof** - connects opening cash, cash movements,
+8. **Cash/history consistency proof** - connects opening cash, cash movements,
    and trade executions to current cash, subject to the negative-money policy.
-8. **Position/history consistency proof** - reconstructs active positions from
+9. **Position/history consistency proof** - reconstructs active positions from
    the opening snapshot and subsequent executions.
-9. **Timestamp/order monotonicity** - useful historical discipline, but less
+10. **Timestamp/order monotonicity** - useful historical discipline, but less
    important to economic correctness than identity, replay, and state agreement.
 
 # Python improvements before split
