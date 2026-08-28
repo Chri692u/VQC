@@ -114,7 +114,7 @@ def Fill(
 
 
 def Position(symbol: str, quantity: int, average_price: Money) -> PositionRecord:
-    """Create a long-position record using whole-share quantity."""
+    """Construct a position record; validation is performed separately."""
     return PositionRecord(symbol, quantity, average_price)
 
 

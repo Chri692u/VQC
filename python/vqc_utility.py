@@ -112,6 +112,8 @@ def DisplayAccount(account: Any) -> str:
 def DisplayLedger(ledger: Any) -> str:
     """Format VQC ledger entries for diagnostics."""
     lines = ["Ledger"]
+    # The generated Account.ledger accessor projects the Dafny Ledger
+    # datatype to its entries sequence at the Python boundary.
     for entry in ledger:
         entry_id = getattr(entry, "ledgerId", "unknown")
         if getattr(entry, "is_Opening", False):

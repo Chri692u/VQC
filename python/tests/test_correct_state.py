@@ -25,6 +25,17 @@ class DafnyStateTests(unittest.TestCase):
         self.assertEqual(account.positions[0].quantity, 2)
         self.assertEqual(len(account.ledger), 3)
 
+    def test_cash_movements_allocate_fresh_ledger_ids_by_default(self):
+        account = VQC.Deposit(VQC.NewAccount(), 1000)
+        account = VQC.Deposit(account, 100)
+        account = VQC.Withdraw(account, 50)
+
+        self.assertEqual(
+            [entry.ledgerId for entry in account.ledger],
+            [1, 2, 3],
+        )
+        self.assertTrue(VQC.IsValidAccount(account))
+
     def test_status_update_keeps_orders_as_a_dafny_sequence(self):
         account = VQC.PlaceOrder(
             VQC.NewAccount(),

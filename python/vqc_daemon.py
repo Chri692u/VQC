@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from threading import Thread
+from threading import Event, Thread
 from typing import Any
 
 from bindings.broker_adapter import TradeUpdateKind
@@ -15,6 +15,9 @@ from vqc_utility import VQCUtility
 class _VQCDaemon:
     """Synchronize broker snapshots and events into one client-owned account."""
 
+    _INITIAL_RETRY_SECONDS = 1
+    _MAX_RETRY_SECONDS = 30
+
     def __init__(self, client: Any) -> None:
         self._client = client
         self._order_ids: dict[str, int] = {}
@@ -22,21 +25,21 @@ class _VQCDaemon:
         self._lifecycle = OrderLifecycle(client.logger)
         self._trade_stream_thread: Thread | None = None
         self._stream_error: Exception | None = None
+        self._stop_event = Event()
 
     def _SyncAccountFromBroker(self) -> None:
         adapter = self._client._adapter
         broker = self._client.broker
-        positions = [
-            adapter.ToVQCPosition(position)
-            for position in adapter.GetPositions(broker)
-        ]
-        broker_orders = adapter.GetOpenOrders(broker)
-        orders = [
-            adapter.ToVQCOrder(order, order_id)
-            for order_id, order in enumerate(broker_orders, start=1)
-        ]
-
         with self._client._state_lock:
+            positions = [
+                adapter.ToVQCPosition(position)
+                for position in adapter.GetPositions(broker)
+            ]
+            broker_orders = adapter.GetOpenOrders(broker)
+            orders = [
+                adapter.ToVQCOrder(order, order_id)
+                for order_id, order in enumerate(broker_orders, start=1)
+            ]
             self._client._account = VQC.Bootstrap(
                 VQC.Money.FromDecimal(str(adapter.GetCash(broker))),
                 positions,
@@ -133,14 +136,51 @@ class _VQCDaemon:
         self._HandleTradeUpdate(update)
 
     def _RunTradeStream(self) -> None:
-        try:
-            self._client._adapter.RunTradeStream(self._client, self._OnTradeUpdate)
-        except Exception as error:
-            self._stream_error = error
+        while not self._stop_event.is_set():
+            try:
+                self._client._adapter.RunTradeStream(
+                    self._client, self._OnTradeUpdate
+                )
+                if self._stop_event.is_set():
+                    return
+                self._stream_error = RuntimeError("trade stream ended")
+            except Exception as error:
+                self._stream_error = error
             self._client.logger.Log(
-                "Daemon", f"Trade stream stopped: {type(error).__name__}: {error}"
+                "Daemon",
+                f"Trade stream stopped: {type(self._stream_error).__name__}: "
+                f"{self._stream_error}",
             )
-            raise
+            if self._stop_event.is_set():
+                return
+            if not self._RecoverBrokerSnapshot():
+                return
+            self._client.logger.Log("Daemon", "Restarting trade stream.")
+
+    def _RecoverBrokerSnapshot(self) -> bool:
+        """Block stream restart until a fresh trusted snapshot is established."""
+        retry_seconds = self._INITIAL_RETRY_SECONDS
+        while not self._stop_event.is_set():
+            try:
+                self._SyncAccountFromBroker()
+                self._client.logger.Log(
+                    "Reconciliation",
+                    "Refreshed broker state after trade-stream interruption.",
+                )
+                return True
+            except Exception as error:
+                self._client.logger.Log(
+                    "Reconciliation",
+                    f"Refresh failed: {type(error).__name__}: {error}. "
+                    f"Retrying in {retry_seconds}s; stream remains stopped.",
+                )
+            if self._stop_event.wait(retry_seconds):
+                return False
+            retry_seconds = min(
+                retry_seconds * 2,
+                self._MAX_RETRY_SECONDS,
+            )
+        return False
 
     def _StartTradeStream(self) -> None:
         if self._trade_stream_thread and self._trade_stream_thread.is_alive():

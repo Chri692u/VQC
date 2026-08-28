@@ -115,15 +115,20 @@ class VQCClient:
         if order_type in {OrderType.STOP, OrderType.STOP_LIMIT}:
             self._validate_price("stop_price", stop_price)
 
+        normalized_symbol = symbol.strip().upper()
         with self._state_lock:
             if not extended_hours and not self.MarketIsOpen():
                 raise RuntimeError(
                     f"[VQC][Client] Market is closed; cannot submit {side.value} "
                     f"order for {symbol} now."
                 )
+            if side is OrderSide.SELL:
+                self._RequireAvailableToSell(
+                    normalized_symbol, absolute_quantity
+                )
             result = self._adapter.SubmitOrder(
                 self.broker,
-                symbol.strip().upper(),
+                normalized_symbol,
                 absolute_quantity,
                 side,
                 order_type,
@@ -133,6 +138,36 @@ class VQCClient:
             )
             self._daemon._TrackSubmittedOrder(result)
             return result
+
+    def _RequireAvailableToSell(self, symbol: str, quantity: int) -> None:
+        """Prevent open sell orders from exceeding a verified long position."""
+        position = next(
+            (
+                position
+                for position in self._account.positions
+                if position.symbol == symbol
+            ),
+            None,
+        )
+        position_quantity = 0 if position is None else position.quantity
+        reserved_quantity = sum(
+            order.quantity - order.filledQuantity
+            for order in self._account.orders
+            if order.symbol == symbol
+            and order.side.is_Sell
+            and (
+                order.status.is_Pending
+                or order.status.is_Open
+                or order.status.is_PartiallyFilled
+            )
+        )
+        available_quantity = position_quantity - reserved_quantity
+        if quantity > available_quantity:
+            raise ValueError(
+                f"cannot sell {quantity} {symbol}; only {available_quantity} "
+                f"shares are available after reserving {reserved_quantity} "
+                "for open sell orders"
+            )
 
     def MarketOrder(self, symbol: str, quantity: int) -> Any:
         """Submit a regular-session market order using signed quantity."""

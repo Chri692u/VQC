@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from alpaca.trading.requests import (
     LimitOrderRequest,
@@ -72,6 +73,14 @@ class ExtendedHoursBroker(SubmissionBroker):
         return SimpleNamespace(is_open=False)
 
 
+class MutableSnapshotBroker(SnapshotBroker):
+    def __init__(self):
+        self.cash = "1000"
+
+    def get_account(self):
+        return SimpleNamespace(cash=self.cash)
+
+
 class ImmediatelyPartiallyFilledBroker(SubmissionBroker):
     def submit_order(self, order_data):
         result = super().submit_order(order_data)
@@ -139,8 +148,8 @@ class BootstrapTests(unittest.TestCase):
 
         client.MarketOrder("GLD", 1)
         client.LimitOrder("GLD", 1, 10)
-        client.StopOrder("GLD", -1, 9)
-        client.StopLimitOrder("GLD", -1, 9, 8)
+        client.StopOrder("GLD", 1, 9)
+        client.StopLimitOrder("GLD", 1, 9, 8)
 
         self.assertEqual(
             [type(request) for request in broker.requests],
@@ -148,7 +157,7 @@ class BootstrapTests(unittest.TestCase):
         )
         self.assertEqual(
             [request.side.value for request in broker.requests],
-            ["buy", "buy", "sell", "sell"],
+            ["buy", "buy", "buy", "buy"],
         )
         submitted_orders = client.account.orders[-4:]
         self.assertTrue(submitted_orders[0].orderType.is_Market)
@@ -171,17 +180,40 @@ class BootstrapTests(unittest.TestCase):
         broker = SubmissionBroker()
         client = VQCClient(broker=broker, start_trade_stream=False)
 
-        client.MarketOrder("SLV", -2)
-        client.Liquidate("GLD")
+        client.MarketOrder("GLD", -1)
 
         self.assertEqual(broker.requests[0].side.value, "sell")
-        self.assertEqual(broker.requests[0].qty, 2)
-        self.assertEqual(broker.requests[1].side.value, "sell")
-        self.assertEqual(broker.requests[1].qty, 1)
+        self.assertEqual(broker.requests[0].qty, 1)
+
+        liquidation_broker = SubmissionBroker()
+        liquidation_client = VQCClient(
+            broker=liquidation_broker, start_trade_stream=False
+        )
+        liquidation_client.Liquidate("GLD")
+        self.assertEqual(liquidation_broker.requests[0].side.value, "sell")
+        self.assertEqual(liquidation_broker.requests[0].qty, 1)
         with self.assertRaisesRegex(ValueError, "cannot be zero"):
             client.MarketOrder("GLD", 0)
         with self.assertRaisesRegex(ValueError, "no open position"):
             client.Liquidate("AAPL")
+
+    def test_sell_orders_reserve_remaining_position_quantity(self):
+        broker = SubmissionBroker()
+        client = VQCClient(broker=broker, start_trade_stream=False)
+
+        client.LimitOrder("GLD", -1, 10)
+
+        with self.assertRaisesRegex(ValueError, "only 0 shares are available"):
+            client.MarketOrder("GLD", -1)
+        self.assertEqual(len(broker.requests), 1)
+
+    def test_sell_without_a_verified_position_is_rejected(self):
+        broker = SubmissionBroker()
+        client = VQCClient(broker=broker, start_trade_stream=False)
+
+        with self.assertRaisesRegex(ValueError, "only 0 shares are available"):
+            client.MarketOrder("SLV", -1)
+        self.assertEqual(broker.requests, [])
 
     def test_fractional_quantities_are_rejected_instead_of_truncated(self):
         client = VQCClient(broker=SubmissionBroker(), start_trade_stream=False)
@@ -310,6 +342,64 @@ class BootstrapTests(unittest.TestCase):
 
         self.assertEqual(len(client.account.orders), 1)
         self.assertTrue(VQC.IsValidAccount(client.account))
+
+    def test_stream_interruption_refreshes_broker_state_before_stopping(self):
+        broker = MutableSnapshotBroker()
+        client = VQCClient(broker=broker, start_trade_stream=False)
+        stream_calls = 0
+
+        def interrupted(*_):
+            nonlocal stream_calls
+            stream_calls += 1
+            if stream_calls == 1:
+                broker.cash = "900"
+                raise ConnectionError("stream disconnected")
+            client._daemon._stop_event.set()
+
+        with patch.object(
+            client._adapter, "RunTradeStream", side_effect=interrupted
+        ):
+            client._daemon._RunTradeStream()
+
+        self.assertEqual(client.account.cash, VQC.Money.FromDecimal("900"))
+        self.assertEqual(stream_calls, 2)
+        self.assertIsInstance(client._daemon._stream_error, ConnectionError)
+        self.assertTrue(VQC.IsValidAccount(client.account))
+
+    def test_stream_stays_stopped_until_snapshot_recovery_succeeds(self):
+        broker = MutableSnapshotBroker()
+        client = VQCClient(broker=broker, start_trade_stream=False)
+        original_get_account = broker.get_account
+        refresh_attempts = 0
+        stream_calls = 0
+
+        def sometimes_failing_account():
+            nonlocal refresh_attempts
+            refresh_attempts += 1
+            if refresh_attempts <= 2:
+                raise ConnectionError("snapshot unavailable")
+            broker.cash = "800"
+            return original_get_account()
+
+        def interrupted(*_):
+            nonlocal stream_calls
+            stream_calls += 1
+            if stream_calls == 1:
+                raise ConnectionError("stream disconnected")
+            client._daemon._stop_event.set()
+
+        broker.get_account = sometimes_failing_account
+        with (
+            patch.object(
+                client._adapter, "RunTradeStream", side_effect=interrupted
+            ),
+            patch.object(client._daemon._stop_event, "wait", return_value=False),
+        ):
+            client._daemon._RunTradeStream()
+
+        self.assertEqual(refresh_attempts, 3)
+        self.assertEqual(stream_calls, 2)
+        self.assertEqual(client.account.cash, VQC.Money.FromDecimal("800"))
 
     def test_client_applies_a_non_fill_lifecycle_event(self):
         client = VQCClient(broker=SnapshotBroker(), start_trade_stream=False)

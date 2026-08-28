@@ -20,6 +20,14 @@ from bindings.vqc_types import (
 
 AccountOps = AccountOpsModule.default__
 
+
+def _NextLedgerId(account: Account) -> int:
+    """Return an identifier greater than every entry in the current ledger."""
+    return max(
+        (entry.ledgerId for entry in account.ledger),
+        default=0,
+    ) + 1
+
 def NewAccount() -> Account:
     """Return a verified empty account."""
     return AccountOps.NewAccount()
@@ -36,14 +44,26 @@ def Bootstrap(
     return AccountOps.Bootstrap(cash, Seq(positions), Seq(orders), ledger_id, timestamp)
 
 
-def Deposit(account: Account, amount: Money, ledger_id: int = 1, timestamp: int = 0) -> Account:
+def Deposit(
+    account: Account,
+    amount: Money,
+    ledger_id: int | None = None,
+    timestamp: int = 0,
+) -> Account:
     """Return an account with a verified positive deposit applied."""
-    return AccountOps.Deposit(account, ledger_id, amount, timestamp)
+    resolved_id = _NextLedgerId(account) if ledger_id is None else ledger_id
+    return AccountOps.Deposit(account, resolved_id, amount, timestamp)
 
 
-def Withdraw(account: Account, amount: Money, ledger_id: int = 1, timestamp: int = 0) -> Account:
+def Withdraw(
+    account: Account,
+    amount: Money,
+    ledger_id: int | None = None,
+    timestamp: int = 0,
+) -> Account:
     """Return an account with a verified positive withdrawal applied."""
-    return AccountOps.Withdraw(account, ledger_id, amount, timestamp)
+    resolved_id = _NextLedgerId(account) if ledger_id is None else ledger_id
+    return AccountOps.Withdraw(account, resolved_id, amount, timestamp)
 
 
 def PlaceOrder(account: Account, order: OrderRecord) -> Account:
