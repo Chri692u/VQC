@@ -43,6 +43,9 @@ module AccountProof {
     {
         IsValidAccount(account) &&
         IsValidOrder(order) &&
+        HasValidOrderStatus(order) &&
+        order.status == Pending &&
+        order.filledQuantity == 0 &&
         !ExistsOrder(account.orders, order.orderId)
     }
 

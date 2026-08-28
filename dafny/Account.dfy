@@ -90,7 +90,7 @@ module AccountOps {
         )
     }
 
-    // Adds a new order to the account.
+    // Adds a fresh pending, unfilled order to the account.
     function PlaceOrderCore(account: Account, order: Order): Account
         requires CanPlaceOrder(account, order)
         ensures IsValidAccount(PlaceOrderCore(account, order))

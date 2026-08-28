@@ -78,7 +78,7 @@ module AccountUtility {
         decreases |positions|
     {
         if |positions| == 0 then
-            Position("", 0, Money(0))
+            Position(symbol, 0, Money(0))
         else if positions[0].symbol == symbol then
             positions[0]
         else
