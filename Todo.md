@@ -1,3 +1,4 @@
+# Dafny improvements before split
 1. **Execution uniqueness** - the identity and deduplication foundation needed
    before safe replay or stronger historical proofs.
 2. **Replay across re-bootstrap boundaries** - the largest remaining gap in
@@ -17,3 +18,13 @@
    the opening snapshot and subsequent executions.
 9. **Timestamp/order monotonicity** - useful historical discipline, but less
    important to economic correctness than identity, replay, and state agreement.
+
+# Python improvements before split
+1. Reconnect / resynchronization
+2. Crash/restart recovery
+3. Persistent execution deduplication
+4. Adapter conformance tests
+5. Explicit synchronization state
+6. Persistent canonical event log
+7. Replay verification integration
+8. Broker-state reconciliation

@@ -44,8 +44,8 @@ A broker adapter contains everything specific to one broker:
 - account, position, order, and market-clock requests;
 - order submission and trade-stream handling;
 - normalization of broker statuses and event kinds;
-- conversion of native money, quantities, timestamps, orders, positions, and
-  fills into VQC records.
+- broker-owned market eligibility and cross-border execution policy, with
+  unsupported identifiers reported through the broker rather than guessed by VQC.
 
 The included `AlpacaAdapter` implements this boundary for Alpaca. Another broker
 can implement `BrokerAdapter` without placing its SDK types or rules in the
