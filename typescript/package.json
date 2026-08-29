@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "TypeScript and JavaScript runtime boundary for VQC.",
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "example": "node examples/BasicAccount.js"
   },
   "dependencies": {
     "bignumber.js": "^11.1.5"

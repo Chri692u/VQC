@@ -16,7 +16,14 @@ export class Money extends Dafny.BigNumber {
             super(Integer(value, "money"));
         } else {
             const decimal = new Dafny.BigNumber(value.toString());
-            super(decimal.multipliedBy(Money.SCALE).integerValue());
+            if (!decimal.isFinite()) {
+                throw new RangeError("money values must be finite");
+            }
+            super(
+                decimal
+                    .multipliedBy(Money.SCALE)
+                    .integerValue(Dafny.BigNumber.ROUND_HALF_EVEN),
+            );
         }
     }
 

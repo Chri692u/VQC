@@ -11,6 +11,24 @@ import {
     toDafnyOrderStatus,
 } from "./vqc_types";
 
+type RuntimeLedgerEntry = { readonly ledgerId: { toFixed(): string } };
+type RuntimeAccount = {
+    readonly ledger: { readonly Elements: readonly RuntimeLedgerEntry[] };
+};
+
+/** Returns an identifier greater than every entry in the current ledger. */
+function NextLedgerId(account: Account): string {
+    const runtimeAccount = account as unknown as RuntimeAccount;
+    let greatest = 0n;
+    for (const entry of runtimeAccount.ledger.Elements) {
+        const entryId = BigInt(entry.ledgerId.toFixed());
+        if (entryId > greatest) {
+            greatest = entryId;
+        }
+    }
+    return (greatest + 1n).toString();
+}
+
 /** Returns a new empty account. */
 export function NewAccount(): Account {
     return Dafny.AccountOps.__default.NewAccount() as Account;
@@ -35,19 +53,21 @@ export function Bootstrap(
 
 /** Applies a deposit and its ledger entry. */
 export function Deposit(
-    account: Account, amount: Money, ledgerId: IntegerInput = 1, timestamp: IntegerInput = 0,
+    account: Account, amount: Money, ledgerId?: IntegerInput, timestamp: IntegerInput = 0,
 ): Account {
+    const resolvedId = ledgerId === undefined ? NextLedgerId(account) : ledgerId;
     return Dafny.AccountOps.__default.Deposit(
-        account, Natural(ledgerId, "ledgerId"), amount, Natural(timestamp, "timestamp"),
+        account, Natural(resolvedId, "ledgerId"), amount, Natural(timestamp, "timestamp"),
     ) as Account;
 }
 
 /** Applies a withdrawal and its ledger entry. */
 export function Withdraw(
-    account: Account, amount: Money, ledgerId: IntegerInput = 1, timestamp: IntegerInput = 0,
+    account: Account, amount: Money, ledgerId?: IntegerInput, timestamp: IntegerInput = 0,
 ): Account {
+    const resolvedId = ledgerId === undefined ? NextLedgerId(account) : ledgerId;
     return Dafny.AccountOps.__default.Withdraw(
-        account, Natural(ledgerId, "ledgerId"), amount, Natural(timestamp, "timestamp"),
+        account, Natural(resolvedId, "ledgerId"), amount, Natural(timestamp, "timestamp"),
     ) as Account;
 }
 

@@ -33,3 +33,14 @@ const next = VQC.PlaceOrder(account, order);
 | `RemainingQuantity` | Returns an order's unfilled quantity. |
 
 Validation predicates are `IsValidOrder`, `IsValidFill`, `IsValidPosition`, `IsValidLedger`, and `IsValidAccount`. Failed verified preconditions raise `HaltException`.
+
+## Bindings-only example
+
+`examples/BasicAccount.ts` creates an account, deposits cash, fills one market
+order, and cancels one limit order without connecting to a broker. Build and run
+it with:
+
+```powershell
+npm run build
+npm run example
+```
